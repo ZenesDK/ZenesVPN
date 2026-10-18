@@ -392,21 +392,52 @@ class ZenesVpnService : VpnService(), PlatformInterface, CommandServerHandler {
         if (!hasV4) builder.addAddress("172.19.0.1", 30)
         if (!hasV6) builder.addAddress("fdfe:dcba:9876::1", 126)
 
-        var dnsAdded = false
-        try {
-            val dnsServers: StringIterator? = options.dnsServerAddress
-            if (dnsServers != null) {
-                while (dnsServers.hasNext()) {
-                    val addr = dnsServers.next()
-                    if (addr.isNotEmpty()) {
-                        builder.addDnsServer(addr)
-                        dnsAdded = true
+        // Per-app lists must be read FIRST: the DNS choice below depends on
+        // whether split tunneling is active.
+        val includePkgs = mutableListOf<String>()
+        val includeIt = options.includePackage
+        while (includeIt.hasNext()) includePkgs.add(includeIt.next())
+        val excludePkgs = mutableListOf<String>()
+        val excludeIt = options.excludePackage
+        while (excludeIt.hasNext()) excludePkgs.add(excludeIt.next())
+        val perAppActive = includePkgs.isNotEmpty() || excludePkgs.isNotEmpty()
+
+        // DNS. sing-tun reports the tun-internal address (the one next to the tun
+        // gateway, e.g. 172.19.0.2) as the system DNS so that DNS queries entering
+        // the tun get hijacked. That is NOT safe in per-app mode: the system DNS
+        // resolver daemon is not among the allowed packages, and on some Android
+        // builds its queries follow the daemon's own uid rules instead of the
+        // requesting app's — a tun-internal DNS then becomes a blackhole and every
+        // allowed app loses name resolution ("selected apps don't work through
+        // VPN"). Public anycast DNS works in both worlds: queries either enter the
+        // tun (sniff + hijack-dns answer them through the proxy) or go out through
+        // the underlying network and resolve anyway. Full-VPN mode keeps the
+        // tun-internal DNS: there the resolver's packets always enter the tun.
+        if (perAppActive) {
+            builder.addDnsServer("1.1.1.1")
+            CrashLogger.breadcrumb("openTun DNS: 1.1.1.1 (per-app mode, public resolver)")
+        } else {
+            var dnsAdded = false
+            try {
+                val dnsServers: StringIterator? = options.dnsServerAddress
+                if (dnsServers != null) {
+                    while (dnsServers.hasNext()) {
+                        val addr = dnsServers.next()
+                        if (addr.isNotEmpty()) {
+                            builder.addDnsServer(addr)
+                            dnsAdded = true
+                        }
                     }
                 }
+            } catch (_: Throwable) {
             }
-        } catch (_: Throwable) {
+            if (!dnsAdded) {
+                builder.addDnsServer("1.1.1.1")
+                CrashLogger.breadcrumb("openTun DNS: 1.1.1.1 (fallback, tun options had none)")
+            } else {
+                CrashLogger.breadcrumb("openTun DNS: taken from tun options")
+            }
         }
-        if (!dnsAdded) builder.addDnsServer("1.1.1.1")
 
         var routed = false
         val it4route = options.inet4RouteRange
@@ -443,35 +474,43 @@ class ZenesVpnService : VpnService(), PlatformInterface, CommandServerHandler {
         // builder itself. The two modes are mutually exclusive in the VpnService
         // API — include wins if both are somehow present. Every add is guarded:
         // a package uninstalled since selection would throw and abort the whole
-        // connection otherwise.
-        val includePkgs = mutableListOf<String>()
-        val includeIt = options.includePackage
-        while (includeIt.hasNext()) includePkgs.add(includeIt.next())
-        val excludePkgs = mutableListOf<String>()
-        val excludeIt = options.excludePackage
-        while (excludeIt.hasNext()) excludePkgs.add(excludeIt.next())
-        var includeApplied = false
+        // connection otherwise. Results are mirrored into the app-visible log:
+        // logcat-only warnings made "why doesn't per-app work" undiagnosable.
+        if (includePkgs.isNotEmpty()) {
+            // SFA parity: the VPN app itself must stay on its own VPN network in
+            // include mode — sing-box for Android always appends its own package
+            // to the include list (and removes it from the exclude list).
+            if (!includePkgs.contains(packageName)) includePkgs.add(packageName)
+        }
+        var includeApplied = 0
         for (pkg in includePkgs) {
             try {
                 builder.addAllowedApplication(pkg)
-                includeApplied = true
+                includeApplied++
             } catch (t: Throwable) {
                 Log.w(TAG, "addAllowedApplication($pkg) failed: ${t.message}")
+                CrashLogger.breadcrumb("per-app allow FAILED: $pkg (${t.message})")
             }
         }
-        if (!includeApplied) {
+        var excludeApplied = 0
+        if (includeApplied == 0) {
             for (pkg in excludePkgs) {
                 try {
                     builder.addDisallowedApplication(pkg)
+                    excludeApplied++
                 } catch (t: Throwable) {
                     Log.w(TAG, "addDisallowedApplication($pkg) failed: ${t.message}")
+                    CrashLogger.breadcrumb("per-app deny FAILED: $pkg (${t.message})")
                 }
             }
         }
         CrashLogger.breadcrumb(
-            "openTun per-app: include=${includePkgs.size}" +
-                (if (excludePkgs.isNotEmpty()) " exclude=${excludePkgs.size}" else ""),
+            "openTun per-app applied: include=$includeApplied/${includePkgs.size}" +
+                (if (excludePkgs.isNotEmpty()) " deny=$excludeApplied/${excludePkgs.size}" else ""),
         )
+        if (includePkgs.isNotEmpty()) {
+            CrashLogger.breadcrumb("per-app allow list: ${includePkgs.joinToString(",")}")
+        }
 
         if (options.strictRoute && Build.VERSION.SDK_INT >= 29) {
             builder.setBlocking(true)
