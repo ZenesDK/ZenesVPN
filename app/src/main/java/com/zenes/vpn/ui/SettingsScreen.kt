@@ -23,8 +23,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.DeleteOutline
+import androidx.compose.material.icons.filled.SystemUpdateAlt
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -53,11 +55,13 @@ import androidx.compose.ui.unit.dp
 import com.zenes.vpn.BuildConfig
 import com.zenes.vpn.R
 import com.zenes.vpn.bg.CrashLogger
+import com.zenes.vpn.core.Updater
 import com.zenes.vpn.data.Store
 import com.zenes.vpn.ui.theme.VividCyan
 import com.zenes.vpn.ui.theme.VividPink
 import com.zenes.vpn.ui.theme.cardTintBrush
 import com.zenes.vpn.util.toast
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.nekohasekai.libbox.Libbox
 
 @Composable
@@ -280,8 +284,69 @@ fun SettingsScreen(onOpenPerApps: () -> Unit) {
                 }
             }
         }
+        Spacer(Modifier.height(12.dp))
+
+        // ---------------- update check ----------------
+        val updateState by Updater.state.collectAsStateWithLifecycle()
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(20.dp))
+                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                .clickable {
+                    if (updateState !is Updater.State.Checking &&
+                        updateState !is Updater.State.Downloading
+                    ) {
+                        Updater.checkAsync(context, auto = false)
+                    }
+                }
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                Icons.Default.SystemUpdateAlt,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+            )
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text(
+                    stringResource(R.string.update_check),
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Text(
+                    text = updateStatusLine(updateState),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            if (updateState is Updater.State.Checking) {
+                CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+            } else {
+                Icon(
+                    Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
         Spacer(Modifier.height(24.dp))
     }
+}
+
+@Composable
+private fun updateStatusLine(state: Updater.State): String = when (state) {
+    is Updater.State.Idle -> stringResource(R.string.update_check_sub)
+    is Updater.State.Checking -> stringResource(R.string.update_checking)
+    is Updater.State.UpToDate -> stringResource(R.string.update_latest)
+    is Updater.State.Available -> stringResource(
+        R.string.update_available_short,
+        state.version,
+    )
+    is Updater.State.Downloading -> stringResource(R.string.update_downloading_percent, state.percent)
+    is Updater.State.Ready -> stringResource(R.string.update_ready_title)
+    is Updater.State.Failed -> stringResource(R.string.update_error, state.message)
 }
 
 @Composable

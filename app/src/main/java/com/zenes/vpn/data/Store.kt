@@ -203,6 +203,11 @@ class Store(context: Context) {
         get() = prefs.getBoolean(KEY_KILL_SWITCH, false)
         set(value) = prefs.edit().putBoolean(KEY_KILL_SWITCH, value).apply()
 
+    /** Unix-ms of the last automatic update check (throttles Updater auto-check). */
+    var lastUpdateCheck: Long
+        get() = prefs.getLong(KEY_LAST_UPDATE_CHECK, 0)
+        set(value) = prefs.edit().putLong(KEY_LAST_UPDATE_CHECK, value).apply()
+
     // ---------- per-app routing ----------
 
     /** PER_APP_ALL / PER_APP_INCLUDE / PER_APP_EXCLUDE */
@@ -226,6 +231,7 @@ class Store(context: Context) {
         private const val KEY_SELECTED = "selected"
         private const val KEY_AUTOSTART = "autostart"
         private const val KEY_KILL_SWITCH = "kill_switch_hint"
+        private const val KEY_LAST_UPDATE_CHECK = "last_update_check"
 
         const val PER_APP_ALL = "all"
         const val PER_APP_INCLUDE = "include"

@@ -20,6 +20,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
@@ -30,6 +31,7 @@ import androidx.navigation.compose.rememberNavController
 import com.zenes.vpn.R
 import com.zenes.vpn.bg.BoxClient
 import com.zenes.vpn.bg.VpnStateBus
+import com.zenes.vpn.core.Updater
 
 sealed class Tab(val route: String, @StringRes val label: Int, val icon: ImageVector) {
     data object Home : Tab("home", R.string.nav_home, Icons.Default.Home)
@@ -61,7 +63,13 @@ fun ZenesApp(onConnectToggle: () -> Unit) {
     }
 
     // Keep the traffic client alive while the UI is visible.
-    LaunchedEffect(Unit) { BoxClient.ensureStarted() }
+    val appContext = LocalContext.current
+    LaunchedEffect(Unit) {
+        BoxClient.ensureStarted()
+        // Automatic update check (throttled to once per 4 h inside Updater);
+        // if a new release exists, UpdateDialog pops up on any tab.
+        Updater.checkAsync(appContext, auto = true)
+    }
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
@@ -101,6 +109,9 @@ fun ZenesApp(onConnectToggle: () -> Unit) {
             }
         }
     }
+
+    // Self-update popup (available / downloading / ready-to-install).
+    UpdateDialog()
 }
 
 /**
