@@ -9,11 +9,13 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.zenes.vpn.R
 import com.zenes.vpn.data.Subscription
+import com.zenes.vpn.ui.theme.VividAmber
 import io.nekohasekai.libbox.Libbox
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -27,15 +29,29 @@ fun subscriptionHasInfo(sub: Subscription): Boolean =
 /**
  * Subscription metadata block: wavy usage bar (only with a traffic quota),
  * a traffic line and an expiry line (red when 3 or fewer days remain).
+ *
+ * With [onHero] = true the block is rendered on a vivid gradient card, so all
+ * text switches to white and the warning color becomes amber.
  */
 @Composable
-fun SubInfoContent(sub: Subscription, compact: Boolean, modifier: Modifier = Modifier) {
+fun SubInfoContent(sub: Subscription, compact: Boolean, modifier: Modifier = Modifier, onHero: Boolean = false) {
     val bodyStyle = if (compact) MaterialTheme.typography.bodySmall else MaterialTheme.typography.bodyMedium
     val dateFmt = remember { SimpleDateFormat("dd.MM.yyyy", Locale.getDefault()) }
+    val bodyColor = if (onHero) Color.White.copy(alpha = 0.92f) else Color.Unspecified
 
     Column(modifier = modifier.fillMaxWidth()) {
         if (sub.total > 0) {
-            WavyProgressBar(progress = { (sub.used.toDouble() / sub.total).toFloat() })
+            WavyProgressBar(
+                progress = { (sub.used.toDouble() / sub.total).toFloat() },
+                color = if (onHero) Color.White else MaterialTheme.colorScheme.primary,
+                brush = if (onHero) {
+                    androidx.compose.ui.graphics.Brush.horizontalGradient(
+                        listOf(Color.White, Color.White.copy(alpha = 0.75f)),
+                    )
+                } else {
+                    null
+                },
+            )
             Spacer(Modifier.height(if (compact) 4.dp else 6.dp))
         }
 
@@ -54,6 +70,7 @@ fun SubInfoContent(sub: Subscription, compact: Boolean, modifier: Modifier = Mod
             Text(
                 text = trafficText,
                 style = bodyStyle,
+                color = bodyColor,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -67,8 +84,12 @@ fun SubInfoContent(sub: Subscription, compact: Boolean, modifier: Modifier = Mod
                 Text(
                     text = stringResource(R.string.sub_info_expires, dateStr, daysLeft),
                     style = bodyStyle,
-                    color = if (daysLeft <= 3) MaterialTheme.colorScheme.error
-                    else MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = when {
+                        onHero && daysLeft <= 3 -> VividAmber
+                        onHero -> Color.White.copy(alpha = 0.85f)
+                        daysLeft <= 3 -> MaterialTheme.colorScheme.error
+                        else -> MaterialTheme.colorScheme.onSurfaceVariant
+                    },
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -76,7 +97,7 @@ fun SubInfoContent(sub: Subscription, compact: Boolean, modifier: Modifier = Mod
                 Text(
                     text = stringResource(R.string.sub_info_expired),
                     style = bodyStyle,
-                    color = MaterialTheme.colorScheme.error,
+                    color = if (onHero) VividAmber else MaterialTheme.colorScheme.error,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )

@@ -2,8 +2,6 @@ package com.zenes.vpn.ui
 
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
@@ -14,6 +12,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -42,6 +41,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
@@ -53,6 +57,18 @@ import com.zenes.vpn.R
 import com.zenes.vpn.bg.VpnStateBus
 import com.zenes.vpn.data.Store
 import com.zenes.vpn.ui.theme.CookieShape
+import com.zenes.vpn.ui.theme.ProtoChip
+import com.zenes.vpn.ui.theme.VividAmber
+import com.zenes.vpn.ui.theme.VividBlue
+import com.zenes.vpn.ui.theme.VividCyan
+import com.zenes.vpn.ui.theme.VividGreen
+import com.zenes.vpn.ui.theme.VividMint
+import com.zenes.vpn.ui.theme.VividOrange
+import com.zenes.vpn.ui.theme.VividPink
+import com.zenes.vpn.ui.theme.VividRed
+import com.zenes.vpn.ui.theme.VividViolet
+import com.zenes.vpn.ui.theme.cardTintBrush
+import com.zenes.vpn.ui.theme.heroBrush
 import io.nekohasekai.libbox.Libbox
 
 @Composable
@@ -77,197 +93,289 @@ fun MainScreen(onConnectToggle: () -> Unit, onGoServers: () -> Unit) {
         VpnStateBus.State.ERROR -> stringResource(R.string.state_error)
     }
 
-    Column(
+    val dark = isSystemInDarkTheme()
+
+    Box(
         modifier = Modifier
             .fillMaxSize()
-            .padding(horizontal = 20.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Spacer(Modifier.height(48.dp))
-
-        // ------------- cookie power button -------------
-        val interaction = remember { MutableInteractionSource() }
-        val pressed by interaction.collectIsPressedAsState()
-        val pressScale by animateFloatAsState(
-            targetValue = if (pressed) 0.9f else 1f,
-            animationSpec = spring(dampingRatio = 0.55f, stiffness = 380f),
-            label = "pressScale",
-        )
-        val busy = state == VpnStateBus.State.CONNECTING || state == VpnStateBus.State.STOPPING
-        val spin = if (busy) {
-            val transition = rememberInfiniteTransition(label = "spin")
-            transition.animateFloat(
-                initialValue = 0f,
-                targetValue = 360f,
-                animationSpec = infiniteRepeatable(tween(9000, easing = LinearEasing)),
-                label = "spinAngle",
-            ).value
-        } else {
-            0f
-        }
-        val buttonColor by animateColorAsState(
-            targetValue = when (state) {
-                VpnStateBus.State.CONNECTED -> MaterialTheme.colorScheme.tertiary
-                VpnStateBus.State.CONNECTING, VpnStateBus.State.STOPPING -> MaterialTheme.colorScheme.primary
-                VpnStateBus.State.ERROR -> MaterialTheme.colorScheme.error
-                else -> MaterialTheme.colorScheme.onSurfaceVariant
+            .drawBehind {
+                // ---- aurora background: soft colorful blobs over the plain background ----
+                val bigR = size.width * 1.05f
+                val midR = size.width * 0.8f
+                val smallR = size.width * 0.62f
+                fun blob(cx: Float, cy: Float, radius: Float, color: Color) {
+                    drawCircle(
+                        brush = Brush.radialGradient(
+                            colors = listOf(color, Color.Transparent),
+                            center = Offset(cx, cy),
+                            radius = radius,
+                        ),
+                        radius = radius,
+                        center = Offset(cx, cy),
+                    )
+                }
+                // top-left violet, top-right cyan, faint pink under the button
+                blob(0f, 0f, bigR, VividViolet.copy(alpha = if (dark) 0.34f else 0.20f))
+                blob(size.width, size.height * 0.16f, midR, VividCyan.copy(alpha = if (dark) 0.24f else 0.15f))
+                blob(size.width * 0.12f, size.height * 0.50f, smallR, VividPink.copy(alpha = if (dark) 0.14f else 0.09f))
             },
-            animationSpec = tween(350),
-            label = "powerColor",
-        )
-
-        Box(
+    ) {
+        Column(
             modifier = Modifier
-                .size(216.dp)
-                .graphicsLayer {
-                    scaleX = pressScale
-                    scaleY = pressScale
-                }
-                .clickable(
-                    interactionSource = interaction,
-                    indication = null,
-                ) { onConnectToggle() },
-            contentAlignment = Alignment.Center,
+                .fillMaxSize()
+                .padding(horizontal = 20.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            // Rotating background (the icon stays still).
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .graphicsLayer { rotationZ = spin }
-                    .background(MaterialTheme.colorScheme.surfaceVariant, CookieShape()),
+            Spacer(Modifier.height(48.dp))
+
+            // ------------- cookie power button with aurora halo -------------
+            val interaction = remember { MutableInteractionSource() }
+            val pressed by interaction.collectIsPressedAsState()
+            val pressScale by animateFloatAsState(
+                targetValue = if (pressed) 0.9f else 1f,
+                animationSpec = spring(dampingRatio = 0.55f, stiffness = 380f),
+                label = "pressScale",
             )
-            Icon(
-                imageVector = Icons.Default.PowerSettingsNew,
-                contentDescription = stringResource(R.string.btn_connect),
-                tint = buttonColor,
-                modifier = Modifier.size(96.dp),
+            val busy = state == VpnStateBus.State.CONNECTING || state == VpnStateBus.State.STOPPING
+            // The halo always rotates: fast while busy, slow and calm otherwise.
+            val spin = if (busy) {
+                rememberInfiniteTransition(label = "spin").animateFloat(
+                    initialValue = 0f,
+                    targetValue = 360f,
+                    animationSpec = infiniteRepeatable(tween(9000, easing = LinearEasing)),
+                    label = "spinAngle",
+                ).value
+            } else {
+                rememberInfiniteTransition(label = "spinSlow").animateFloat(
+                    initialValue = 0f,
+                    targetValue = 360f,
+                    animationSpec = infiniteRepeatable(tween(44000, easing = LinearEasing)),
+                    label = "spinAngleSlow",
+                ).value
+            }
+
+            // Aurora ring colors follow the connection state.
+            val ringTargets = when (state) {
+                VpnStateBus.State.CONNECTED -> listOf(VividGreen, VividCyan, VividMint)
+                VpnStateBus.State.CONNECTING, VpnStateBus.State.STOPPING -> listOf(VividBlue, VividViolet, VividCyan)
+                VpnStateBus.State.ERROR -> listOf(VividRed, VividOrange, VividPink)
+                else -> listOf(VividViolet, VividBlue, VividCyan)
+            }
+            val ring = List(3) { i ->
+                animateColorAsState(ringTargets[i], tween(700), label = "ring$i").value
+            }
+            val glowColor = ring[0]
+            val ringBrush = Brush.sweepGradient(ring + ring.first())
+            val fillBrush = Brush.linearGradient(
+                listOf(ring[0].copy(alpha = 0.20f), ring[2].copy(alpha = 0.10f)),
             )
-        }
 
-        Spacer(Modifier.height(28.dp))
-        Text(statusText, style = MaterialTheme.typography.headlineMedium)
-        Spacer(Modifier.height(6.dp))
-        Text(
-            text = (selected?.flag?.plus(" ") ?: "") + (
-                selected?.name ?: stringResource(R.string.no_server_selected)
-                ),
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
+            val accent by animateColorAsState(
+                targetValue = when (state) {
+                    VpnStateBus.State.CONNECTED -> VividGreen
+                    VpnStateBus.State.CONNECTING, VpnStateBus.State.STOPPING -> VividBlue
+                    VpnStateBus.State.ERROR -> VividRed
+                    else -> MaterialTheme.colorScheme.onSurfaceVariant
+                },
+                animationSpec = tween(350),
+                label = "powerColor",
+            )
 
-        Spacer(Modifier.height(28.dp))
-
-        // ------------- current server card -------------
-        Surface(
-            shape = RoundedCornerShape(28.dp),
-            color = MaterialTheme.colorScheme.surfaceVariant,
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            Row(
-                modifier = Modifier.padding(16.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Icon(
-                    Icons.Default.Dns,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
+            Box(contentAlignment = Alignment.Center) {
+                // soft glow behind everything
+                Box(
+                    modifier = Modifier
+                        .size(258.dp)
+                        .background(
+                            Brush.radialGradient(
+                                listOf(glowColor.copy(alpha = if (dark) 0.30f else 0.20f), Color.Transparent),
+                            ),
+                        ),
                 )
-                Spacer(Modifier.width(12.dp))
-                Column(Modifier.weight(1f)) {
-                    Text(
-                        stringResource(R.string.current_server),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Text(
-                        (selected?.flag?.plus(" ") ?: "") + (selected?.name ?: "—"),
-                        style = MaterialTheme.typography.titleSmall,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    Text(
-                        text = selected?.let { "${it.proto.uppercase()} · ${it.host}" } ?: "—",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
-                Spacer(Modifier.width(8.dp))
-                Button(
-                    onClick = onGoServers,
-                    shape = RoundedCornerShape(50),
+                // rotating aurora ring (the icon stays still)
+                Box(
+                    modifier = Modifier
+                        .size(234.dp)
+                        .graphicsLayer { rotationZ = spin }
+                        .background(ringBrush, CookieShape()),
+                )
+                // cookie face
+                Box(
+                    modifier = Modifier
+                        .size(212.dp)
+                        .graphicsLayer {
+                            scaleX = pressScale
+                            scaleY = pressScale
+                        }
+                        .clickable(
+                            interactionSource = interaction,
+                            indication = null,
+                        ) { onConnectToggle() }
+                        .background(MaterialTheme.colorScheme.surfaceVariant, CookieShape())
+                        .background(fillBrush, CookieShape()),
+                    contentAlignment = Alignment.Center,
                 ) {
-                    Text(stringResource(R.string.change_server))
+                    Icon(
+                        imageVector = Icons.Default.PowerSettingsNew,
+                        contentDescription = stringResource(R.string.btn_connect),
+                        tint = accent,
+                        modifier = Modifier.size(96.dp),
+                    )
                 }
             }
-        }
 
-        // ------------- subscription card -------------
-        if (sub != null && subscriptionHasInfo(sub)) {
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(24.dp))
+
+            // status pill
             Surface(
-                shape = RoundedCornerShape(28.dp),
-                color = MaterialTheme.colorScheme.surfaceVariant,
-                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(50),
+                color = accent.copy(alpha = 0.14f),
             ) {
-                Column(Modifier.padding(16.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            Icons.Default.CloudDownload,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(18.dp),
-                        )
-                        Spacer(Modifier.width(8.dp))
+                Text(
+                    text = statusText,
+                    style = MaterialTheme.typography.titleSmall,
+                    color = accent,
+                    modifier = Modifier.padding(horizontal = 18.dp, vertical = 7.dp),
+                )
+            }
+
+            Spacer(Modifier.height(6.dp))
+            Text(
+                text = (selected?.flag?.plus(" ") ?: "") + (
+                    selected?.name ?: stringResource(R.string.no_server_selected)
+                    ),
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+
+            Spacer(Modifier.height(24.dp))
+
+            // ------------- current server card -------------
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(28.dp))
+                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                    .background(cardTintBrush()),
+            ) {
+                Row(
+                    modifier = Modifier.padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(
+                        Icons.Default.Dns,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                    )
+                    Spacer(Modifier.width(12.dp))
+                    Column(Modifier.weight(1f)) {
                         Text(
-                            stringResource(R.string.home_subscription),
+                            stringResource(R.string.current_server),
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
+                        Text(
+                            (selected?.flag?.plus(" ") ?: "") + (selected?.name ?: "—"),
+                            style = MaterialTheme.typography.titleSmall,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            selected?.let {
+                                ProtoChip(it.proto)
+                                Spacer(Modifier.width(6.dp))
+                            }
+                            Text(
+                                text = selected?.host ?: "—",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
                     }
-                    Spacer(Modifier.height(6.dp))
-                    Text(
-                        sub.name,
-                        style = MaterialTheme.typography.titleMedium,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    Spacer(Modifier.height(6.dp))
-                    SubInfoContent(sub, compact = false)
+                    Spacer(Modifier.width(8.dp))
+                    Button(
+                        onClick = onGoServers,
+                        shape = RoundedCornerShape(50),
+                    ) {
+                        Text(stringResource(R.string.change_server))
+                    }
                 }
             }
-        }
 
-        // ------------- traffic card -------------
-        if (state == VpnStateBus.State.CONNECTED) {
-            Spacer(Modifier.height(16.dp))
-            Surface(
-                shape = RoundedCornerShape(28.dp),
-                color = MaterialTheme.colorScheme.surfaceVariant,
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Row(
+            // ------------- subscription card (hero gradient) -------------
+            if (sub != null && subscriptionHasInfo(sub)) {
+                Spacer(Modifier.height(16.dp))
+                Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(16.dp),
-                    horizontalArrangement = Arrangement.SpaceEvenly,
-                    verticalAlignment = Alignment.CenterVertically,
+                        .clip(RoundedCornerShape(28.dp))
+                        .background(heroBrush()),
                 ) {
-                    TrafficCell(
-                        icon = Icons.Default.ArrowUpward,
-                        label = stringResource(R.string.upload_speed),
-                        speed = Libbox.formatBytes(uplink) + "/s",
-                        total = Libbox.formatBytes(uplinkTotal),
-                    )
-                    TrafficCell(
-                        icon = Icons.Default.ArrowDownward,
-                        label = stringResource(R.string.download_speed),
-                        speed = Libbox.formatBytes(downlink) + "/s",
-                        total = Libbox.formatBytes(downlinkTotal),
-                    )
+                    Column(Modifier.padding(16.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                Icons.Default.CloudDownload,
+                                contentDescription = null,
+                                tint = Color.White.copy(alpha = 0.92f),
+                                modifier = Modifier.size(18.dp),
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                stringResource(R.string.home_subscription),
+                                style = MaterialTheme.typography.labelMedium,
+                                color = Color.White.copy(alpha = 0.85f),
+                            )
+                        }
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            sub.name,
+                            style = MaterialTheme.typography.titleMedium,
+                            color = Color.White,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        Spacer(Modifier.height(6.dp))
+                        SubInfoContent(sub, compact = false, onHero = true)
+                    }
+                }
+            }
+
+            // ------------- traffic card -------------
+            if (state == VpnStateBus.State.CONNECTED) {
+                Spacer(Modifier.height(16.dp))
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(28.dp))
+                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                        .background(cardTintBrush()),
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        horizontalArrangement = Arrangement.SpaceEvenly,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        TrafficCell(
+                            icon = Icons.Default.ArrowUpward,
+                            tint = VividAmber,
+                            label = stringResource(R.string.upload_speed),
+                            speed = Libbox.formatBytes(uplink) + "/s",
+                            total = Libbox.formatBytes(uplinkTotal),
+                        )
+                        TrafficCell(
+                            icon = Icons.Default.ArrowDownward,
+                            tint = VividCyan,
+                            label = stringResource(R.string.download_speed),
+                            speed = Libbox.formatBytes(downlink) + "/s",
+                            total = Libbox.formatBytes(downlinkTotal),
+                        )
+                    }
                 }
             }
         }
@@ -275,9 +383,9 @@ fun MainScreen(onConnectToggle: () -> Unit, onGoServers: () -> Unit) {
 }
 
 @Composable
-private fun TrafficCell(icon: ImageVector, label: String, speed: String, total: String) {
+private fun TrafficCell(icon: ImageVector, tint: Color, label: String, speed: String, total: String) {
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Icon(icon, contentDescription = label, tint = MaterialTheme.colorScheme.primary)
+        Icon(icon, contentDescription = label, tint = tint)
         Spacer(Modifier.width(10.dp))
         Column {
             Text(

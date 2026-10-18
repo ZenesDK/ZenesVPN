@@ -13,6 +13,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
@@ -25,12 +26,15 @@ import kotlin.math.sin
 /**
  * Wavy progress bar: the filled part is a sine wave that slowly drifts sideways,
  * the remaining part is a flat track line.
+ *
+ * Pass [brush] to paint the wave with a gradient; the track line always uses [color].
  */
 @Composable
 fun WavyProgressBar(
     progress: () -> Float,
     modifier: Modifier = Modifier,
     color: Color = MaterialTheme.colorScheme.primary,
+    brush: Brush? = null,
 ) {
     val density = LocalDensity.current
     val lambda = with(density) { 18.dp.toPx() }  // wavelength, px
@@ -80,6 +84,10 @@ fun WavyProgressBar(
             x += 4f
         }
         if (first) path.moveTo(0f, mid)
-        drawPath(path, color, style = Stroke(width = stroke, cap = StrokeCap.Round))
+        if (brush != null) {
+            drawPath(path, brush, style = Stroke(width = stroke, cap = StrokeCap.Round))
+        } else {
+            drawPath(path, color, style = Stroke(width = stroke, cap = StrokeCap.Round))
+        }
     }
 }

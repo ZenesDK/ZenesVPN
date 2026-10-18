@@ -2,6 +2,9 @@ package com.zenes.vpn.ui
 
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -48,6 +51,9 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
@@ -62,6 +68,11 @@ import com.zenes.vpn.data.ServerProfile
 import com.zenes.vpn.data.Store
 import com.zenes.vpn.data.Subscription
 import com.zenes.vpn.parser.LinkParser
+import com.zenes.vpn.ui.theme.VividAmber
+import com.zenes.vpn.ui.theme.VividCyan
+import com.zenes.vpn.ui.theme.VividViolet
+import com.zenes.vpn.ui.theme.heroBrush
+import com.zenes.vpn.ui.theme.protocolColor
 import com.zenes.vpn.util.Importer
 import com.zenes.vpn.util.tcpPing
 import com.zenes.vpn.util.toast
@@ -149,7 +160,7 @@ fun ServersScreen() {
                     Icon(
                         Icons.Default.Dns,
                         contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(72.dp),
                     )
                     Spacer(Modifier.height(16.dp))
@@ -274,6 +285,7 @@ fun ServersScreen() {
                 SheetItem(
                     icon = Icons.Default.QrCodeScanner,
                     label = stringResource(R.string.scan_qr),
+                    iconTint = VividViolet,
                 ) {
                     showAddSheet = false
                     val activity = context as? android.app.Activity
@@ -289,6 +301,7 @@ fun ServersScreen() {
                 SheetItem(
                     icon = Icons.Default.CloudDownload,
                     label = stringResource(R.string.from_subscription),
+                    iconTint = VividAmber,
                 ) {
                     showAddSheet = false
                     showSubDialog = true
@@ -384,10 +397,12 @@ private fun SubscriptionCard(
     onRefresh: () -> Unit,
     onDelete: () -> Unit,
 ) {
-    Surface(
-        shape = RoundedCornerShape(20.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant,
-        modifier = Modifier.fillMaxWidth(),
+    // Vivid hero gradient makes the subscription the most colorful card on the screen.
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(22.dp))
+            .background(heroBrush()),
     ) {
         Row(
             modifier = Modifier.padding(start = 16.dp, end = 4.dp, top = 12.dp, bottom = 12.dp),
@@ -398,12 +413,13 @@ private fun SubscriptionCard(
                     sub.name,
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold,
+                    color = Color.White,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
                 if (subscriptionHasInfo(sub)) {
                     Spacer(Modifier.height(4.dp))
-                    SubInfoContent(sub, compact = true)
+                    SubInfoContent(sub, compact = true, onHero = true)
                 }
                 Text(
                     stringResource(
@@ -412,21 +428,21 @@ private fun SubscriptionCard(
                         else stringResource(R.string.sub_never),
                     ),
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = Color.White.copy(alpha = 0.75f),
                 )
             }
             IconButton(onClick = onRefresh) {
                 Icon(
                     Icons.Default.Refresh,
                     contentDescription = stringResource(R.string.sub_refresh),
-                    tint = MaterialTheme.colorScheme.primary,
+                    tint = Color.White,
                 )
             }
             IconButton(onClick = onDelete) {
                 Icon(
                     Icons.Default.DeleteOutline,
                     contentDescription = stringResource(R.string.delete),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    tint = Color.White.copy(alpha = 0.8f),
                 )
             }
         }
@@ -441,11 +457,23 @@ private fun ServerCard(
     onPing: () -> Unit,
     onDelete: () -> Unit,
 ) {
+    val shape = RoundedCornerShape(20.dp)
     Surface(
-        shape = RoundedCornerShape(20.dp),
+        shape = shape,
         color = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
         modifier = Modifier
             .fillMaxWidth()
+            .then(
+                if (selected) {
+                    // Gradient outline around the selected server.
+                    Modifier.border(
+                        BorderStroke(2.dp, Brush.linearGradient(listOf(VividViolet, VividCyan))),
+                        shape,
+                    )
+                } else {
+                    Modifier
+                },
+            )
             .clickable { onSelect() },
     ) {
         Row(
@@ -485,13 +513,17 @@ private fun ServerCard(
                         }
                     }
                 }
-                Text(
-                    "${profile.proto.uppercase()} · ${profile.host}:${profile.port}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    ProtoChipInline(profile.proto)
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        "${profile.host}:${profile.port}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
             }
             IconButton(onClick = onPing) {
                 Icon(
@@ -513,7 +545,7 @@ private fun ServerCard(
 
 /** One option row inside the import sheet. Generous vertical padding keeps options apart. */
 @Composable
-private fun SheetItem(icon: ImageVector, label: String, onClick: () -> Unit) {
+private fun SheetItem(icon: ImageVector, label: String, iconTint: Color = MaterialTheme.colorScheme.primary, onClick: () -> Unit) {
     Surface(
         shape = RoundedCornerShape(18.dp),
         color = MaterialTheme.colorScheme.surfaceVariant,
@@ -525,9 +557,24 @@ private fun SheetItem(icon: ImageVector, label: String, onClick: () -> Unit) {
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 18.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+            Icon(icon, contentDescription = null, tint = iconTint)
             Spacer(Modifier.width(16.dp))
             Text(label, style = MaterialTheme.typography.titleMedium)
         }
     }
+}
+
+/** Inline protocol chip used inside server rows (tiny, non-interactive). */
+@Composable
+private fun ProtoChipInline(proto: String) {
+    val color = protocolColor(proto)
+    Text(
+        text = proto.uppercase(),
+        style = MaterialTheme.typography.labelSmall,
+        fontWeight = FontWeight.Bold,
+        color = color,
+        modifier = Modifier
+            .background(color.copy(alpha = 0.16f), RoundedCornerShape(6.dp))
+            .padding(horizontal = 5.dp, vertical = 2.dp),
+    )
 }
