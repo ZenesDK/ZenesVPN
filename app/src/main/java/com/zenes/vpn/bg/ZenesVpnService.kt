@@ -46,6 +46,7 @@ class ZenesVpnService : VpnService(), PlatformInterface, CommandServerHandler {
         private const val TAG = "ZenesVPN"
         private const val CHANNEL_ID = "zenes_vpn"
         private const val NOTIF_ID = 1
+        private const val STATS_INTERVAL_MS = 1000L
 
         fun start(context: Context) {
             try {
@@ -158,9 +159,11 @@ class ZenesVpnService : VpnService(), PlatformInterface, CommandServerHandler {
                 CrashLogger.breadcrumb("box started OK")
                 VpnStateBus.post(VpnStateBus.State.CONNECTED)
                 updateNotification()
+                startStatsTicker()
                 BoxClient.ensureStarted()
             } catch (t: Throwable) {
                 if (shouldStop) return@Thread
+                stopStatsTicker()
                 CrashLogger.log("Failed to start VPN service", t)
                 VpnStateBus.post(
                     VpnStateBus.State.ERROR,
@@ -185,6 +188,7 @@ class ZenesVpnService : VpnService(), PlatformInterface, CommandServerHandler {
         stopInProgress = true
         shouldStop = true
         CrashLogger.breadcrumb("stopBox requested")
+        stopStatsTicker()
         VpnStateBus.post(VpnStateBus.State.STOPPING)
         Thread({
             // Tear the Android VPN interface down FIRST (SFA pattern): closing the
@@ -234,6 +238,7 @@ class ZenesVpnService : VpnService(), PlatformInterface, CommandServerHandler {
     }
 
     override fun onDestroy() {
+        stopStatsTicker()
         if (boxStarted || commandServer != null) {
             // Service killed by the system while running — clean up best effort.
             try {
@@ -264,6 +269,26 @@ class ZenesVpnService : VpnService(), PlatformInterface, CommandServerHandler {
 
     // ------------------------------------------------------------ notification
 
+    // Refreshes the foreground notification once per second while connected,
+    // so the speed / session-traffic counters stay live (libbox pushes status
+    // updates into VpnStateBus every second via BoxClient).
+    private val statsTicker = object : Runnable {
+        override fun run() {
+            if (VpnStateBus.state.value != VpnStateBus.State.CONNECTED) return
+            updateNotification()
+            mainHandler.postDelayed(this, STATS_INTERVAL_MS)
+        }
+    }
+
+    private fun startStatsTicker() {
+        mainHandler.removeCallbacks(statsTicker)
+        mainHandler.post(statsTicker)
+    }
+
+    private fun stopStatsTicker() {
+        mainHandler.removeCallbacks(statsTicker)
+    }
+
     private fun createChannel() {
         if (Build.VERSION.SDK_INT >= 26) {
             val channel = NotificationChannel(
@@ -289,24 +314,39 @@ class ZenesVpnService : VpnService(), PlatformInterface, CommandServerHandler {
             Intent(this, ZenesVpnService::class.java).setAction(ACTION_STOP),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
-        val text = when (state) {
-            VpnStateBus.State.CONNECTED -> getString(R.string.notif_connected)
-            VpnStateBus.State.CONNECTING -> getString(R.string.notif_connecting)
-            VpnStateBus.State.STOPPING -> getString(R.string.notif_connecting)
-            VpnStateBus.State.ERROR ->
-                getString(R.string.notif_error, VpnStateBus.error.value ?: "")
-            else -> getString(R.string.notif_disconnected)
-        }
-        return NotificationCompat.Builder(this, CHANNEL_ID)
+        val builder = NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_stat_zenes)
             .setContentTitle("ZenesVPN")
-            .setContentText(text)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .setContentIntent(contentPi)
             .setCategory(NotificationCompat.CATEGORY_SERVICE)
             .addAction(0, getString(R.string.notif_disconnect), stopPi)
-            .build()
+
+        when (state) {
+            VpnStateBus.State.CONNECTED -> {
+                // Live speeds + session totals (updated every second by statsTicker).
+                val up = Libbox.formatBytes(VpnStateBus.uplink.value) + "/s"
+                val down = Libbox.formatBytes(VpnStateBus.downlink.value) + "/s"
+                val upTotal = Libbox.formatBytes(VpnStateBus.uplinkTotal.value)
+                val downTotal = Libbox.formatBytes(VpnStateBus.downlinkTotal.value)
+                builder.setContentText(getString(R.string.notif_protected_stats, down, up))
+                builder.setStyle(
+                    NotificationCompat.BigTextStyle().bigText(
+                        getString(R.string.notif_connected) + "\n" +
+                            getString(R.string.notif_speed_line, down, up) + "\n" +
+                            getString(R.string.notif_session_traffic, downTotal, upTotal),
+                    ),
+                )
+            }
+            VpnStateBus.State.CONNECTING, VpnStateBus.State.STOPPING ->
+                builder.setContentText(getString(R.string.notif_connecting))
+            VpnStateBus.State.ERROR ->
+                builder.setContentText(getString(R.string.notif_error, VpnStateBus.error.value ?: ""))
+            else ->
+                builder.setContentText(getString(R.string.notif_disconnected))
+        }
+        return builder.build()
     }
 
     private fun updateNotification() {

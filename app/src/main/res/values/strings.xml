@@ -81,6 +81,9 @@
     <string name="notif_disconnected">Disconnected</string>
     <string name="notif_error">Error: %1$s</string>
     <string name="notif_disconnect">Disconnect</string>
+    <string name="notif_protected_stats">Protected · ↓ %1$s · ↑ %2$s</string>
+    <string name="notif_speed_line">↓ %1$s · ↑ %2$s</string>
+    <string name="notif_session_traffic">Session: ↓ %1$s · ↑ %2$s</string>
 
     <!-- QR -->
     <string name="qr_prompt">Place a QR code with the config link inside the frame</string>

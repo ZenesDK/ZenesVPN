@@ -14,6 +14,8 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -120,13 +122,16 @@ fun MainScreen(onConnectToggle: () -> Unit, onGoServers: () -> Unit) {
                 blob(size.width * 0.12f, size.height * 0.50f, smallR, VividPink.copy(alpha = if (dark) 0.14f else 0.09f))
             },
     ) {
+        // verticalScroll: on shorter screens (or large font scale) the content
+        // used to overflow and the traffic card got clipped to an empty pill.
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .verticalScroll(rememberScrollState())
                 .padding(horizontal = 20.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Spacer(Modifier.height(48.dp))
+            Spacer(Modifier.height(24.dp))
 
             // ------------- cookie power button with aurora halo -------------
             val interaction = remember { MutableInteractionSource() }
@@ -224,7 +229,7 @@ fun MainScreen(onConnectToggle: () -> Unit, onGoServers: () -> Unit) {
                 }
             }
 
-            Spacer(Modifier.height(24.dp))
+            Spacer(Modifier.height(16.dp))
 
             // status pill
             Surface(
@@ -250,7 +255,7 @@ fun MainScreen(onConnectToggle: () -> Unit, onGoServers: () -> Unit) {
                 overflow = TextOverflow.Ellipsis,
             )
 
-            Spacer(Modifier.height(24.dp))
+            Spacer(Modifier.height(16.dp))
 
             // ------------- current server card -------------
             Box(
@@ -308,7 +313,7 @@ fun MainScreen(onConnectToggle: () -> Unit, onGoServers: () -> Unit) {
 
             // ------------- subscription card (hero gradient) -------------
             if (sub != null && subscriptionHasInfo(sub)) {
-                Spacer(Modifier.height(16.dp))
+                Spacer(Modifier.height(12.dp))
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -346,7 +351,7 @@ fun MainScreen(onConnectToggle: () -> Unit, onGoServers: () -> Unit) {
 
             // ------------- traffic card -------------
             if (state == VpnStateBus.State.CONNECTED) {
-                Spacer(Modifier.height(16.dp))
+                Spacer(Modifier.height(12.dp))
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -378,6 +383,8 @@ fun MainScreen(onConnectToggle: () -> Unit, onGoServers: () -> Unit) {
                     }
                 }
             }
+
+            Spacer(Modifier.height(16.dp))
         }
     }
 }

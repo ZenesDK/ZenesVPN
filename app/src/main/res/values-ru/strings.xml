@@ -81,6 +81,9 @@
     <string name="notif_disconnected">Отключено</string>
     <string name="notif_error">Ошибка: %1$s</string>
     <string name="notif_disconnect">Отключить</string>
+    <string name="notif_protected_stats">Защищено · ↓ %1$s · ↑ %2$s</string>
+    <string name="notif_speed_line">↓ %1$s · ↑ %2$s</string>
+    <string name="notif_session_traffic">За сессию: ↓ %1$s · ↑ %2$s</string>
 
     <!-- QR -->
     <string name="qr_prompt">Наведите рамку на QR-код со ссылкой на конфиг</string>
