@@ -1,0 +1,73 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Restore signing material
+        env:
+          KEYSTORE_B64: ${{ secrets.KEYSTORE_B64 }}
+          STOREPASSWORD: ${{ secrets.STOREPASSWORD }}
+          KEYALIAS: ${{ secrets.KEYALIAS }}
+          KEYPASSWORD: ${{ secrets.KEYPASSWORD }}
+        run: |
+          if [ -n "$KEYSTORE_B64" ]; then
+            mkdir -p app/keystore
+            echo "$KEYSTORE_B64" | base64 -d > app/keystore/zenes.jks
+            cat > keystore.properties <<EOF
+          storeFile=keystore/zenes.jks
+          storePassword=$STOREPASSWORD
+          keyAlias=$KEYALIAS
+          keyPassword=$KEYPASSWORD
+          EOF
+            echo "Signing: release will be signed with the provided key"
+          else
+            echo "Signing: no secrets provided — building UNSIGNED release APK"
+          fi
+
+      - name: Build release APK
+        run: ./gradlew :app:assembleRelease --no-daemon --stacktrace
+
+      - name: Extract changelog section
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          VERSION="${TAG#v}"
+          awk -v ver="$VERSION" '
+            $0 ~ "^## \\[" ver "\\]" {flag=1; next}
+            /^## \[/ && flag {exit}
+            flag {print}
+          ' CHANGELOG.md > release_body.md
+          if [ ! -s release_body.md ]; then
+            printf 'ZenesVPN %s\n\nFull changes: see [CHANGELOG.md](./CHANGELOG.md).\n' "$VERSION" > release_body.md
+          fi
+          cat release_body.md
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          body_path: release_body.md
+          files: app/build/outputs/apk/release/*.apk
+          fail_on_unmatched_files: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

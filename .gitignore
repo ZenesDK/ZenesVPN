@@ -1,0 +1,16 @@
+# Local-only signing material — never publish the keystore.
+keystore.properties
+app/keystore/*.jks
+app/keystore/*.keystore
+
+# SDK / IDE
+local.properties
+.gradle/
+build/
+app/build/
+*.iml
+.idea/
+.kotlin/
+
+# OS
+.DS_Store

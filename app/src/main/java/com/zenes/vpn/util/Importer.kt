@@ -1,0 +1,146 @@
+package com.zenes.vpn.util
+
+import android.content.Context
+import android.os.SystemClock
+import android.widget.Toast
+import com.zenes.vpn.data.ServerProfile
+import com.zenes.vpn.data.Store
+import com.zenes.vpn.parser.LinkParser
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import java.net.InetSocketAddress
+import java.net.Socket
+import java.net.URL
+
+/** TCP connect latency in ms; null when unreachable. */
+suspend fun tcpPing(host: String, port: Int, timeoutMs: Int = 3000): Int? =
+    withContext(Dispatchers.IO) {
+        try {
+            val socket = Socket()
+            val started = SystemClock.elapsedRealtime()
+            socket.connect(InetSocketAddress(host, port), timeoutMs)
+            val elapsed = (SystemClock.elapsedRealtime() - started).toInt()
+            try {
+                socket.close()
+            } catch (_: Throwable) {
+            }
+            elapsed
+        } catch (_: Throwable) {
+            null
+        }
+    }
+
+fun toast(context: Context, message: String) {
+    try {
+        Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+    } catch (_: Throwable) {
+    }
+}
+
+/** Result of a subscription fetch: body + standard subscription headers. */
+class SubFetch(
+    val body: String,
+    val upload: Long = 0,
+    val download: Long = 0,
+    val total: Long = 0,
+    val expire: Long = 0, // unix seconds
+    val title: String? = null,
+    val updateIntervalHours: Int = 0,
+)
+
+object Importer {
+
+    /** Parses arbitrary text (links, base64 subscription body) and stores profiles. Returns added count. */
+    suspend fun importText(context: Context, text: String, subId: String? = null): Int =
+        withContext(Dispatchers.IO) {
+            val links = LinkParser.extractLinks(text)
+            val profiles = mutableListOf<ServerProfile>()
+            for (link in links) {
+                val profile = LinkParser.parseLink(link)
+                if (profile != null) {
+                    profiles.add(profile.copy(subId = subId))
+                }
+            }
+            if (profiles.isEmpty()) return@withContext 0
+            Store(context).addServers(profiles)
+        }
+
+    /** Downloads a subscription URL, imports its content and stores metadata (traffic/expire/title). */
+    suspend fun importSubscription(context: Context, url: String): kotlin.Result<Int> =
+        withContext(Dispatchers.IO) {
+            try {
+                val fetched = fetchSubscription(url)
+                val store = Store(context)
+                val sub = store.subs().firstOrNull { it.url == url } ?: store.addSub("", url)
+                // If the name is still the auto-generated one, prefer the server-provided title.
+                val autoNamed = sub.name.isBlank() || sub.name == url.substringBefore("/")
+                val named = sub.copy(
+                    name = if (autoNamed && !fetched.title.isNullOrBlank()) fetched.title!! else sub.name,
+                    upload = fetched.upload,
+                    download = fetched.download,
+                    total = fetched.total,
+                    expire = fetched.expire,
+                )
+                store.updateSub(named)
+                val count = importText(context, fetched.body, subId = sub.id)
+                store.updateSub(named.copy(lastUpdate = System.currentTimeMillis()))
+                kotlin.Result.success(count)
+            } catch (t: Throwable) {
+                kotlin.Result.failure(t)
+            }
+        }
+
+    /** Fetches a subscription URL and parses the standard headers next to the body. */
+    fun fetchSubscription(url: String): SubFetch {
+        val connection = URL(url).openConnection() as java.net.HttpURLConnection
+        connection.connectTimeout = 15000
+        connection.readTimeout = 15000
+        connection.instanceFollowRedirects = true
+        connection.setRequestProperty("User-Agent", "ZenesVPN/1.4")
+        try {
+            val code = connection.responseCode
+            if (code !in 200..299) {
+                throw RuntimeException("HTTP $code")
+            }
+            val body = connection.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
+
+            // subscription-userinfo: upload=123; download=456; total=789; expire=1700000000
+            var upload = 0L
+            var download = 0L
+            var total = 0L
+            var expire = 0L
+            connection.getHeaderField("subscription-userinfo")?.let { info ->
+                for (part in info.split(";")) {
+                    val kv = part.trim().split("=", limit = 2)
+                    if (kv.size != 2) continue
+                    val value = kv[1].trim().toLongOrNull() ?: continue
+                    when (kv[0].trim().lowercase()) {
+                        "upload" -> upload = value
+                        "download" -> download = value
+                        "total" -> total = value
+                        "expire" -> expire = value
+                    }
+                }
+            }
+
+            // profile-title: plain or "base64:<b64>"
+            var title: String? = connection.getHeaderField("profile-title")?.trim()
+            if (title != null && title.startsWith("base64:")) {
+                title = try {
+                    String(android.util.Base64.decode(title.removePrefix("base64:"), android.util.Base64.DEFAULT), Charsets.UTF_8)
+                } catch (_: Throwable) {
+                    null
+                }
+            }
+            if (title.isNullOrBlank()) title = null
+
+            // profile-update-interval: hours
+            val interval = connection.getHeaderField("profile-update-interval")
+                ?.trim()?.toIntOrNull() ?: 0
+
+            return SubFetch(body, upload, download, total, expire, title, interval)
+        } finally {
+            connection.disconnect()
+        }
+    }
+}

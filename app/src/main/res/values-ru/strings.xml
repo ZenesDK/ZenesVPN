@@ -1,0 +1,118 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">ZenesVPN</string>
+
+    <!-- Nav -->
+    <string name="nav_home">Главная</string>
+    <string name="nav_servers">Серверы</string>
+    <string name="nav_subs">Подписки</string>
+    <string name="nav_settings">Настройки</string>
+
+    <!-- Main -->
+    <string name="state_disconnected">Отключено</string>
+    <string name="state_connecting">Подключение…</string>
+    <string name="state_connected">Подключено</string>
+    <string name="state_stopping">Отключение…</string>
+    <string name="state_error">Ошибка</string>
+    <string name="current_server">Текущий сервер</string>
+    <string name="no_server_selected">Сервер не выбран</string>
+    <string name="change_server">Сменить</string>
+    <string name="btn_connect">Подключить</string>
+    <string name="btn_disconnect">Отключить</string>
+    <string name="upload_speed">Исходящий</string>
+    <string name="download_speed">Входящий</string>
+    <string name="vpn_permission_denied">Разрешение VPN не выдано. Подключение отменено.</string>
+    <string name="no_server">Сначала добавьте сервер</string>
+
+    <!-- Servers -->
+    <string name="servers_title">Серверы</string>
+    <string name="ping_all">Пинг всех</string>
+    <string name="pinging">Проверка…</string>
+    <string name="ping_fail">недоступен</string>
+    <string name="servers_empty">Нет серверов.\nДобавьте конфиг через буфер обмена, QR-код или подписку.</string>
+    <string name="add_server">Добавить сервер</string>
+    <string name="import_clipboard">Импорт из буфера</string>
+    <string name="scan_qr">Сканировать QR</string>
+    <string name="from_subscription">Из подписки</string>
+    <string name="clipboard_empty">Буфер обмена пуст или не содержит ссылок</string>
+    <string name="imported_count">Добавлено серверов: %1$d</string>
+    <string name="delete_server">Удалить сервер?</string>
+    <string name="delete">Удалить</string>
+    <string name="cancel">Отмена</string>
+    <string name="select_server">Сервер выбран</string>
+
+    <!-- Subscription -->
+    <string name="subs_title">Подписки</string>
+    <string name="subs_empty">Нет подписок.\nДобавьте ссылку на подписку, чтобы автоматически получать список серверов.</string>
+    <string name="add_subscription">Добавить подписку</string>
+    <string name="sub_name">Название (необязательно)</string>
+    <string name="sub_url">Ссылка на подписку</string>
+    <string name="sub_add">Добавить</string>
+    <string name="sub_updated">Обновлено: %1$s</string>
+    <string name="sub_never">никогда</string>
+    <string name="sub_refresh">Обновить</string>
+    <string name="sub_updated_ok">Подписка обновлена: серверов %1$d</string>
+    <string name="sub_error">Ошибка подписки: %1$s</string>
+    <string name="delete_subscription">Удалить подписку?</string>
+    <string name="servers_also_removed">Её серверы также будут удалены.</string>
+
+    <!-- Settings -->
+    <string name="settings_title">Настройки</string>
+    <string name="section_connection">Подключение</string>
+    <string name="autostart">Автозапуск</string>
+    <string name="autostart_desc">Подключаться автоматически после включения устройства</string>
+    <string name="kill_switch">Kill Switch</string>
+    <string name="kill_switch_desc">Блокировать трафик при обрыве VPN. Откроет системный экран «Always-on VPN» — включите его для ZenesVPN.</string>
+    <string name="kill_switch_hint">В системных настройках VPN включите «Always-on VPN» и «Блокировать соединения без VPN» для ZenesVPN.</string>
+    <string name="section_diagnostics">Диагностика</string>
+    <string name="crash_log">Журнал ошибок</string>
+    <string name="crash_log_empty">Ошибок не зафиксировано</string>
+    <string name="crash_copy">Копировать</string>
+    <string name="crash_clear">Очистить</string>
+    <string name="crash_copied">Журнал скопирован</string>
+    <string name="section_about">О приложении</string>
+    <string name="about_version">Версия приложения</string>
+    <string name="about_engine">Движок (sing-box)</string>
+
+    <!-- Notifications -->
+    <string name="notif_channel">Статус VPN</string>
+    <string name="notif_connecting">Подключение…</string>
+    <string name="notif_connected">Защищено</string>
+    <string name="notif_disconnected">Отключено</string>
+    <string name="notif_error">Ошибка: %1$s</string>
+    <string name="notif_disconnect">Отключить</string>
+
+    <!-- QR -->
+    <string name="qr_prompt">Наведите рамку на QR-код со ссылкой на конфиг</string>
+
+    <!-- Маршрутизация по приложениям -->
+    <string name="perapp_title">Маршрутизация приложений</string>
+    <string name="perapp_summary_all">Через VPN идут все приложения</string>
+    <string name="perapp_summary_include">VPN только для выбранных: %1$d</string>
+    <string name="perapp_summary_exclude">Все, кроме выбранных: %1$d</string>
+    <string name="perapp_mode_all">Все</string>
+    <string name="perapp_mode_include">Только</string>
+    <string name="perapp_mode_exclude">Кроме</string>
+    <string name="perapp_desc_all">Каждое приложение идёт через VPN.</string>
+    <string name="perapp_desc_include">Через VPN идут только выбранные приложения.</string>
+    <string name="perapp_desc_exclude">Выбранные приложения обходят VPN.</string>
+    <string name="perapp_selected_count">Выбрано: %1$d</string>
+    <string name="perapp_search_hint">Поиск приложений</string>
+    <string name="perapp_show_system">Показывать системные</string>
+    <string name="perapp_loading">Загрузка приложений…</string>
+    <string name="perapp_empty">Ничего не найдено</string>
+    <string name="perapp_apply_hint">применится после переподключения</string>
+    <string name="perapp_clear">Очистить</string>
+
+    <!-- Информация о подписке -->
+    <string name="sub_info_used">Трафик: %1$s из %2$s</string>
+    <string name="sub_info_unlimited">%1$s · безлимит</string>
+    <string name="sub_info_expires">до %1$s · осталось %2$d дн.</string>
+    <string name="sub_info_expired">Подписка истекла</string>
+    <string name="home_subscription">Подписка</string>
+
+    <!-- Журнал ошибок -->
+    <string name="crash_expand">Развернуть</string>
+    <string name="crash_collapse">Свернуть</string>
+    <string name="crash_log_entries">Записей: %1$d</string>
+</resources>
