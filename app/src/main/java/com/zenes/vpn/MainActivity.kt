@@ -15,11 +15,9 @@ import com.zenes.vpn.bg.BoxClient
 import com.zenes.vpn.bg.CrashLogger
 import com.zenes.vpn.bg.ZenesVpnService
 import com.zenes.vpn.bg.VpnStateBus
-import com.zenes.vpn.core.SbConfig
-import com.zenes.vpn.data.Store
+import com.zenes.vpn.core.ConfigWriter
 import com.zenes.vpn.ui.ZenesApp
 import com.zenes.vpn.ui.theme.ZenesTheme
-import java.io.File
 
 class MainActivity : ComponentActivity() {
 
@@ -87,27 +85,14 @@ class MainActivity : ComponentActivity() {
 
     private fun connect() {
         try {
-            val store = Store(this)
-            val server = store.selectedServer()
-            if (server == null) {
-                VpnStateBus.post(VpnStateBus.State.ERROR, getString(R.string.no_server))
+            // Build + validate the config (with per-app routing lists) BEFORE
+            // touching the VPN permission dialog.
+            val writeError = ConfigWriter.write(this)
+            if (writeError != null) {
+                VpnStateBus.post(VpnStateBus.State.ERROR, writeError)
                 return
             }
-            // Build + validate the config BEFORE touching the VPN permission dialog.
-            val config = SbConfig.build(server)
-            File(filesDir, "config.json").writeText(config)
-            CrashLogger.breadcrumb("connect: config built (${config.length} bytes)")
-            try {
-                LibboxCheck.check(config)
-            } catch (t: Throwable) {
-                CrashLogger.log("Config validation failed", t)
-                VpnStateBus.post(
-                    VpnStateBus.State.ERROR,
-                    (t.message ?: "invalid config").take(300),
-                )
-                return
-            }
-            CrashLogger.breadcrumb("connect: checkConfig OK")
+            CrashLogger.breadcrumb("connect: config written + checked")
             val prepare = try {
                 VpnService.prepare(this)
             } catch (t: Throwable) {
@@ -144,13 +129,6 @@ class MainActivity : ComponentActivity() {
         } catch (t: Throwable) {
             CrashLogger.log("disconnect() failed", t)
             VpnStateBus.post(VpnStateBus.State.DISCONNECTED)
-        }
-    }
-
-    /** Small indirection so the check call is always guarded. */
-    private object LibboxCheck {
-        fun check(config: String) {
-            io.nekohasekai.libbox.Libbox.checkConfig(config)
         }
     }
 

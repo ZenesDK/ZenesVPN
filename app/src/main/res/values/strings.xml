@@ -103,6 +103,9 @@
     <string name="perapp_empty">Nothing found</string>
     <string name="perapp_apply_hint">applies after reconnect</string>
     <string name="perapp_clear">Clear</string>
+    <string name="perapp_apply_now_title">Routing changes apply when the VPN connects.</string>
+    <string name="perapp_apply_now_button">Reconnect now</string>
+    <string name="perapp_reconnecting">Reconnecting with the new routing…</string>
 
     <!-- Subscription info -->
     <string name="sub_info_used">Traffic: %1$s of %2$s</string>

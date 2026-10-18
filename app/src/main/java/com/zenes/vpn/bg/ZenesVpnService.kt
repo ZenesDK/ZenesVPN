@@ -147,31 +147,11 @@ class ZenesVpnService : VpnService(), PlatformInterface, CommandServerHandler {
                 // NOTE: the second argument MUST be a real OverrideOptions instance —
                 // passing null crashes inside libbox with a Go nil-pointer panic
                 // (command_server.go StartOrReloadService dereferences options.IncludePackage).
+                // Per-app routing lists travel INSIDE config.json ("include_package" /
+                // "exclude_package" on the tun inbound, written by ConfigWriter) — the
+                // same path sing-box for Android uses for its profiles. They reach
+                // TunOptions and are applied to VpnService.Builder in openTun().
                 val override = OverrideOptions()
-                try {
-                    // Per-app routing (split tunneling): the package lists travel via
-                    // OverrideOptions -> tun inbound options -> TunOptions and are
-                    // applied to VpnService.Builder in openTun().
-                    val store = Store(this@ZenesVpnService)
-                    when (store.perAppMode) {
-                        Store.PER_APP_INCLUDE -> {
-                            val pkgs = store.perAppInclude.filter { it.isNotBlank() }
-                            if (pkgs.isNotEmpty()) {
-                                override.includePackage = LibStringIterator(pkgs)
-                                CrashLogger.breadcrumb("per-app include: ${pkgs.size} apps")
-                            }
-                        }
-                        Store.PER_APP_EXCLUDE -> {
-                            val pkgs = store.perAppExclude.filter { it.isNotBlank() }
-                            if (pkgs.isNotEmpty()) {
-                                override.excludePackage = LibStringIterator(pkgs)
-                                CrashLogger.breadcrumb("per-app exclude: ${pkgs.size} apps")
-                            }
-                        }
-                    }
-                } catch (t: Throwable) {
-                    CrashLogger.log("per-app settings read failed", t)
-                }
                 server.startOrReloadService(config, override)
                 if (shouldStop) return@Thread
                 boxStarted = true

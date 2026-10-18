@@ -8,8 +8,7 @@ import android.service.quicksettings.Tile
 import android.service.quicksettings.TileService
 import com.zenes.vpn.MainActivity
 import com.zenes.vpn.R
-import com.zenes.vpn.core.SbConfig
-import com.zenes.vpn.data.Store
+import com.zenes.vpn.core.ConfigWriter
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -66,21 +65,13 @@ class QuickTileService : TileService() {
     private fun connect() {
         try {
             val context = applicationContext
-            val server = Store(context).selectedServer()
-            if (server == null) {
-                openApp() // the app shows "add a server first"
-                return
-            }
-            // Build + validate the config right here so the tile works even when
-            // the app process is dead or the user changed the server in the app
-            // without pressing Connect afterwards.
-            try {
-                val config = SbConfig.build(server)
-                File(context.filesDir, "config.json").writeText(config)
-                io.nekohasekai.libbox.Libbox.checkConfig(config)
-            } catch (t: Throwable) {
-                CrashLogger.log("tile: config build failed", t)
-                openApp() // the app surfaces the error message
+            // Build + validate the config (with per-app routing lists) right here
+            // so the tile works even when the app process is dead or the user
+            // changed the server in the app without pressing Connect afterwards.
+            val writeError = ConfigWriter.write(context)
+            if (writeError != null) {
+                // "no server" or config validation failed — the app surfaces it.
+                openApp()
                 return
             }
             val prepare = try {

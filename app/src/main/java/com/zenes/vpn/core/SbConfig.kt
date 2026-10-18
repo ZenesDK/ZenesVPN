@@ -8,10 +8,20 @@ import org.json.JSONObject
  * Builds a sing-box v1.14 configuration for the given server profile.
  * Topology: tun inbound <-> [proxy] / [direct] outbounds, DNS split,
  * sniff + dns-hijack route rules.
+ *
+ * Per-app routing (split tunneling) is embedded directly into the tun inbound
+ * ("include_package" / "exclude_package") exactly like SFA does for its
+ * profiles: sing-box carries those lists through the tun options to
+ * TunOptions, and the VPN service applies them to VpnService.Builder in
+ * openTun(). Android applies include and exclude exclusively, include wins.
  */
 object SbConfig {
 
-    fun build(profile: ServerProfile): String {
+    fun build(
+        profile: ServerProfile,
+        includePackages: List<String> = emptyList(),
+        excludePackages: List<String> = emptyList(),
+    ): String {
         val root = JSONObject()
 
         root.put("log", JSONObject().put("level", "warn").put("timestamp", true))
@@ -53,6 +63,11 @@ object SbConfig {
             // our gVisor build (sing-box-mod fork + Go 1.25) crashed in the TCP
             // dispatcher while processing real traffic (SIGSEGV in sleeper/park path).
             .put("stack", "system")
+        if (includePackages.isNotEmpty()) {
+            tun.put("include_package", JSONArray(includePackages))
+        } else if (excludePackages.isNotEmpty()) {
+            tun.put("exclude_package", JSONArray(excludePackages))
+        }
         root.put("inbounds", JSONArray().put(tun))
 
         // ---------------- outbounds ----------------

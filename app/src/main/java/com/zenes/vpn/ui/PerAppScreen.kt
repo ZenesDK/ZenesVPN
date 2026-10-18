@@ -33,6 +33,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -42,6 +43,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -52,10 +54,20 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.graphics.drawable.toBitmap
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.zenes.vpn.MainActivity
 import com.zenes.vpn.R
+import com.zenes.vpn.bg.VpnStateBus
+import com.zenes.vpn.bg.ZenesVpnService
+import com.zenes.vpn.core.ConfigWriter
 import com.zenes.vpn.data.Store
+import com.zenes.vpn.util.toast
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 
 private data class AppEntry(
     val pkg: String,
@@ -68,6 +80,8 @@ private data class AppEntry(
 fun PerAppScreen(onBack: () -> Unit) {
     val context = LocalContext.current
     val store = remember { Store(context) }
+    val scope = rememberCoroutineScope()
+    val vpnState by VpnStateBus.state.collectAsStateWithLifecycle()
 
     var mode by remember { mutableStateOf(store.perAppMode) }
     var include by remember { mutableStateOf(store.perAppInclude) }
@@ -167,6 +181,49 @@ fun PerAppScreen(onBack: () -> Unit) {
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+
+        // When the VPN is up, per-app changes still need a reconnect: offer a
+        // one-tap "apply" that rewrites config.json and restarts the tunnel.
+        if (mode != Store.PER_APP_ALL &&
+            (vpnState == VpnStateBus.State.CONNECTED || vpnState == VpnStateBus.State.CONNECTING)
+        ) {
+            Spacer(Modifier.height(8.dp))
+            Surface(
+                shape = RoundedCornerShape(16.dp),
+                color = MaterialTheme.colorScheme.primaryContainer,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Row(
+                    modifier = Modifier.padding(start = 16.dp, end = 4.dp, top = 10.dp, bottom = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        stringResource(R.string.perapp_apply_now_title),
+                        style = MaterialTheme.typography.bodySmall,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.weight(1f),
+                    )
+                    TextButton(onClick = {
+                        scope.launch {
+                            val writeError = withContext(Dispatchers.IO) { ConfigWriter.write(context) }
+                            if (writeError != null) {
+                                toast(context, writeError)
+                                return@launch
+                            }
+                            toast(context, context.getString(R.string.perapp_reconnecting))
+                            ZenesVpnService.stop(context)
+                            withTimeoutOrNull(8000) {
+                                VpnStateBus.state.first { it == VpnStateBus.State.DISCONNECTED }
+                            }
+                            delay(300)
+                            MainActivity.startServiceCompat(context)
+                        }
+                    }) {
+                        Text(stringResource(R.string.perapp_apply_now_button))
+                    }
+                }
+            }
+        }
         Spacer(Modifier.height(12.dp))
 
         if (mode != Store.PER_APP_ALL) {

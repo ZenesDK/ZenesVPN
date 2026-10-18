@@ -103,6 +103,9 @@
     <string name="perapp_empty">Ничего не найдено</string>
     <string name="perapp_apply_hint">применится после переподключения</string>
     <string name="perapp_clear">Очистить</string>
+    <string name="perapp_apply_now_title">Маршрутизация применяется при подключении VPN.</string>
+    <string name="perapp_apply_now_button">Переподключить</string>
+    <string name="perapp_reconnecting">Переподключаю с новой маршрутизацией…</string>
 
     <!-- Информация о подписке -->
     <string name="sub_info_used">Трафик: %1$s из %2$s</string>
