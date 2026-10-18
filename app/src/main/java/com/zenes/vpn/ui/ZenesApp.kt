@@ -3,7 +3,6 @@ package com.zenes.vpn.ui
 import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.Dns
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Settings
@@ -35,7 +34,6 @@ import com.zenes.vpn.bg.VpnStateBus
 sealed class Tab(val route: String, @StringRes val label: Int, val icon: ImageVector) {
     data object Home : Tab("home", R.string.nav_home, Icons.Default.Home)
     data object Servers : Tab("servers", R.string.nav_servers, Icons.Default.Dns)
-    data object Subs : Tab("subs", R.string.nav_subs, Icons.Default.CloudDownload)
     data object Settings : Tab("settings", R.string.nav_settings, Icons.Default.Settings)
 }
 
@@ -43,7 +41,7 @@ sealed class Tab(val route: String, @StringRes val label: Int, val icon: ImageVe
 fun ZenesApp(onConnectToggle: () -> Unit) {
     val navController = rememberNavController()
     val snackbarHostState = remember { SnackbarHostState() }
-    val tabs = listOf(Tab.Home, Tab.Servers, Tab.Subs, Tab.Settings)
+    val tabs = listOf(Tab.Home, Tab.Servers, Tab.Settings)
 
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route
@@ -92,9 +90,6 @@ fun ZenesApp(onConnectToggle: () -> Unit) {
             }
             composable(Tab.Servers.route) {
                 ServersScreen()
-            }
-            composable(Tab.Subs.route) {
-                SubsScreen()
             }
             composable(Tab.Settings.route) {
                 SettingsScreen(onOpenPerApps = {

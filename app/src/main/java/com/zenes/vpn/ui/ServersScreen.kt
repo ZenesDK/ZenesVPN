@@ -24,6 +24,7 @@ import androidx.compose.material.icons.filled.Dns
 import androidx.compose.material.icons.filled.ContentPaste
 import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.QrCodeScanner
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -59,12 +60,16 @@ import com.google.zxing.integration.android.IntentIntegrator
 import com.zenes.vpn.R
 import com.zenes.vpn.data.ServerProfile
 import com.zenes.vpn.data.Store
+import com.zenes.vpn.data.Subscription
 import com.zenes.vpn.parser.LinkParser
 import com.zenes.vpn.util.Importer
 import com.zenes.vpn.util.tcpPing
 import com.zenes.vpn.util.toast
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -78,11 +83,15 @@ fun ServersScreen() {
     var showAddSheet by remember { mutableStateOf(false) }
     var showSubDialog by remember { mutableStateOf(false) }
     var deleteTarget by remember { mutableStateOf<ServerProfile?>(null) }
+    var deleteSubTarget by remember { mutableStateOf<Subscription?>(null) }
     var pingingAll by remember { mutableIntStateOf(0) }
+    var subs by remember { mutableStateOf(Store(context).subs()) }
+    val dateFormat = remember { SimpleDateFormat("dd.MM.yyyy HH:mm", Locale.getDefault()) }
 
     fun reload() {
         servers = Store(context).servers()
         selectedId = Store(context).selectedId()
+        subs = Store(context).subs()
     }
 
     val qrLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
@@ -131,7 +140,7 @@ fun ServersScreen() {
             }
             Spacer(Modifier.height(8.dp))
 
-            if (servers.isEmpty()) {
+            if (servers.isEmpty() && subs.isEmpty()) {
                 Column(
                     modifier = Modifier.fillMaxSize(),
                     horizontalAlignment = Alignment.CenterHorizontally,
@@ -157,6 +166,37 @@ fun ServersScreen() {
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                     modifier = Modifier.fillMaxSize(),
                 ) {
+                    if (subs.isNotEmpty()) {
+                        item(key = "subs_header") {
+                            Text(
+                                stringResource(R.string.nav_subs),
+                                style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(top = 4.dp),
+                            )
+                        }
+                        items(subs, key = { "sub_${it.id}" }) { sub ->
+                            SubscriptionCard(
+                                sub = sub,
+                                dateFormat = dateFormat,
+                                onRefresh = {
+                                    scope.launch {
+                                        val result = Importer.importSubscription(context, sub.url)
+                                        toast(
+                                            context,
+                                            if (result.isSuccess)
+                                                context.getString(R.string.sub_updated_ok, result.getOrNull() ?: 0)
+                                            else
+                                                context.getString(R.string.sub_error, result.exceptionOrNull()?.message ?: "?"),
+                                        )
+                                        reload()
+                                    }
+                                },
+                                onDelete = { deleteSubTarget = sub },
+                            )
+                        }
+                        item(key = "subs_gap") { Spacer(Modifier.height(6.dp)) }
+                    }
                     items(servers, key = { it.id }) { profile ->
                         ServerCard(
                             profile = profile,
@@ -314,6 +354,82 @@ fun ServersScreen() {
                 TextButton(onClick = { deleteTarget = null }) { Text(stringResource(R.string.cancel)) }
             },
         )
+    }
+
+    // ---------------- delete subscription dialog ----------------
+    deleteSubTarget?.let { target ->
+        AlertDialog(
+            onDismissRequest = { deleteSubTarget = null },
+            title = { Text(stringResource(R.string.delete_subscription)) },
+            text = { Text(stringResource(R.string.servers_also_removed)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    Store(context).deleteSub(target.id)
+                    deleteSubTarget = null
+                    reload()
+                }) { Text(stringResource(R.string.delete), color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = {
+                TextButton(onClick = { deleteSubTarget = null }) { Text(stringResource(R.string.cancel)) }
+            },
+        )
+    }
+}
+
+/** Compact subscription card shown at the top of the merged servers list. */
+@Composable
+private fun SubscriptionCard(
+    sub: Subscription,
+    dateFormat: SimpleDateFormat,
+    onRefresh: () -> Unit,
+    onDelete: () -> Unit,
+) {
+    Surface(
+        shape = RoundedCornerShape(20.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Row(
+            modifier = Modifier.padding(start = 16.dp, end = 4.dp, top = 12.dp, bottom = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text(
+                    sub.name,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                if (subscriptionHasInfo(sub)) {
+                    Spacer(Modifier.height(4.dp))
+                    SubInfoContent(sub, compact = true)
+                }
+                Text(
+                    stringResource(
+                        R.string.sub_updated,
+                        if (sub.lastUpdate > 0) dateFormat.format(Date(sub.lastUpdate))
+                        else stringResource(R.string.sub_never),
+                    ),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            IconButton(onClick = onRefresh) {
+                Icon(
+                    Icons.Default.Refresh,
+                    contentDescription = stringResource(R.string.sub_refresh),
+                    tint = MaterialTheme.colorScheme.primary,
+                )
+            }
+            IconButton(onClick = onDelete) {
+                Icon(
+                    Icons.Default.DeleteOutline,
+                    contentDescription = stringResource(R.string.delete),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
     }
 }
 
