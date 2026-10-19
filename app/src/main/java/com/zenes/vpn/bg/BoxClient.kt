@@ -10,6 +10,7 @@ import io.nekohasekai.libbox.OutboundGroupIterator
 import io.nekohasekai.libbox.StringIterator
 import io.nekohasekai.libbox.ConnectionEvents
 import io.nekohasekai.libbox.StatusMessage
+import com.zenes.vpn.data.StatsStore
 import kotlin.concurrent.thread
 
 /**
@@ -111,6 +112,8 @@ object BoxClient : CommandClientHandler {
         VpnStateBus.downlink.value = message.downlink
         VpnStateBus.uplinkTotal.value = message.uplinkTotal
         VpnStateBus.downlinkTotal.value = message.downlinkTotal
+        // Daily/server traffic accounting (deltas of the session totals).
+        StatsStore.accumulate(message.uplinkTotal, message.downlinkTotal)
     }
 
     override fun connected() {}

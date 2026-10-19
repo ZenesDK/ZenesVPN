@@ -186,4 +186,21 @@
     <string name="crash_expand">Expand</string>
     <string name="crash_collapse">Collapse</string>
     <string name="crash_log_entries">Entries: %1$d</string>
+
+    <!-- Statistics -->
+    <string name="stats_title">Statistics</string>
+    <string name="stats_entry_sub">Traffic by day and server</string>
+    <string name="stats_by_server">By server</string>
+    <string name="stats_empty">No data yet — connect to the VPN</string>
+    <string name="stats_reset">Clear statistics</string>
+    <string name="stats_reset_text">All accumulated traffic statistics will be permanently deleted.</string>
+    <string name="period_7">7 days</string>
+    <string name="period_14">14 days</string>
+    <string name="period_30">30 days</string>
+
+    <!-- Ad blocking -->
+    <string name="ads_title">Ad blocking</string>
+    <string name="ads_desc">Ads and trackers are blocked at the DNS level. Applied on the next connection.</string>
+    <string name="ads_toast_on">Ad blocking will take effect on the next connection</string>
+    <string name="ads_toast_off">Ad blocking will be disabled on the next connection</string>
 </resources>

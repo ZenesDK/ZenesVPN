@@ -186,4 +186,21 @@
     <string name="crash_expand">Развернуть</string>
     <string name="crash_collapse">Свернуть</string>
     <string name="crash_log_entries">Записей: %1$d</string>
+
+    <!-- Статистика -->
+    <string name="stats_title">Статистика</string>
+    <string name="stats_entry_sub">Трафик по дням и серверам</string>
+    <string name="stats_by_server">По серверам</string>
+    <string name="stats_empty">Данных пока нет — подключитесь к VPN</string>
+    <string name="stats_reset">Очистить статистику</string>
+    <string name="stats_reset_text">Вся накопленная статистика трафика будет удалена безвозвратно.</string>
+    <string name="period_7">7 дней</string>
+    <string name="period_14">14 дней</string>
+    <string name="period_30">30 дней</string>
+
+    <!-- Блокировка рекламы -->
+    <string name="ads_title">Блокировка рекламы</string>
+    <string name="ads_desc">Реклама и трекеры блокируются на уровне DNS. Применяется при следующем подключении.</string>
+    <string name="ads_toast_on">Блокировка рекламы включится при следующем подключении</string>
+    <string name="ads_toast_off">Блокировка рекламы отключится при следующем подключении</string>
 </resources>

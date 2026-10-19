@@ -2,6 +2,7 @@ package com.zenes.vpn
 
 import android.app.Application
 import com.zenes.vpn.bg.CrashLogger
+import com.zenes.vpn.data.StatsStore
 import io.nekohasekai.libbox.Libbox
 import io.nekohasekai.libbox.SetupOptions
 import java.io.File
@@ -11,6 +12,7 @@ class App : Application() {
     override fun onCreate() {
         super.onCreate()
         CrashLogger.init(this)
+        StatsStore.init(this)
         CrashLogger.captureNativeReportIfAny()
         CrashLogger.breadcrumb("app start v${BuildConfig.VERSION_NAME}")
 

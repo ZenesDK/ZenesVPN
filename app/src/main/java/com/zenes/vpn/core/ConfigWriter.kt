@@ -42,13 +42,15 @@ object ConfigWriter {
                 include,
                 exclude,
                 routingMode = store.routingMode,
-                ruleSetDir = ensureRuleSets(context, store.routingMode),
+                ruleSetDir = ensureRuleSets(context, store.routingMode, store.blockAds),
+                blockAds = store.blockAds,
             )
             File(context.filesDir, "config.json").writeText(config)
             io.nekohasekai.libbox.Libbox.checkConfig(config)
             CrashLogger.breadcrumb(
                 "config written: ${config.length} bytes, mode=${store.perAppMode}" +
-                    " include=${include.size} exclude=${exclude.size} route=${store.routingMode}",
+                    " include=${include.size} exclude=${exclude.size} route=${store.routingMode}" +
+                    " ads=${store.blockAds}",
             )
             null
         } catch (t: Throwable) {
@@ -60,18 +62,26 @@ object ConfigWriter {
     /**
      * Copies the bundled .srs rule-sets (sing-geosite / sing-geoip, "rule-set"
      * branches) from assets into filesDir/rule-sets. Files are refreshed on
-     * every write so an app update ships updated lists; ~60 KB total, done
-     * before the config is validated (sing-box loads local rule-sets at
-     * start, a missing file is fatal). Returns the directory that must be
-     * referenced by the config, or null when smart routing is off.
+     * every write so an app update ships updated lists; done before the config
+     * is validated (sing-box loads local rule-sets at start, a missing file is
+     * fatal). Returns the directory that must be referenced by the config, or
+     * null when neither smart routing nor ad blocking needs rule-sets.
      */
-    private fun ensureRuleSets(context: Context, mode: String): String? {
-        if (mode != Store.ROUTE_RU) return null
+    private fun ensureRuleSets(context: Context, mode: String, blockAds: Boolean): String? {
+        val needRu = mode == Store.ROUTE_RU
+        if (!needRu && !blockAds) return null
         val dir = File(context.filesDir, "rule-sets")
         dir.mkdirs()
-        for (name in RULE_SET_FILES) {
-            context.assets.open("rulesets/$name").use { input ->
-                File(dir, name).writeBytes(input.readBytes())
+        if (needRu) {
+            for (name in RULE_SET_FILES) {
+                context.assets.open("rulesets/$name").use { input ->
+                    File(dir, name).writeBytes(input.readBytes())
+                }
+            }
+        }
+        if (blockAds) {
+            context.assets.open("rulesets/${ADS_RULE_SET}").use { input ->
+                File(dir, ADS_RULE_SET).writeBytes(input.readBytes())
             }
         }
         return dir.absolutePath
@@ -82,4 +92,6 @@ object ConfigWriter {
         "category-gov-ru.srs",
         "geoip-ru.srs",
     )
+
+    private const val ADS_RULE_SET = "category-ads-all.srs"
 }

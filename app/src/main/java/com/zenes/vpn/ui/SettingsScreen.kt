@@ -68,6 +68,7 @@ import androidx.compose.ui.unit.dp
 import com.zenes.vpn.BuildConfig
 import com.zenes.vpn.R
 import com.zenes.vpn.bg.CrashLogger
+import com.zenes.vpn.bg.VpnStateBus
 import com.zenes.vpn.core.Updater
 import com.zenes.vpn.data.Store
 import com.zenes.vpn.ui.theme.VividAmber
@@ -88,7 +89,7 @@ import java.util.Date
 import java.util.Locale
 
 @Composable
-fun SettingsScreen(onOpenPerApps: () -> Unit) {
+fun SettingsScreen(onOpenPerApps: () -> Unit, onOpenStats: () -> Unit) {
     val context = LocalContext.current
     val clipboard = LocalClipboardManager.current
 
@@ -231,6 +232,23 @@ fun SettingsScreen(onOpenPerApps: () -> Unit) {
                 }
             },
         )
+        var blockAds = remember { Store(context).blockAds }
+        SettingSwitch(
+            title = stringResource(R.string.ads_title),
+            subtitle = stringResource(R.string.ads_desc),
+            checked = blockAds,
+            onChange = { checked ->
+                blockAds = checked
+                Store(context).blockAds = checked
+                val st = VpnStateBus.state.value
+                if (st == VpnStateBus.State.CONNECTED || st == VpnStateBus.State.CONNECTING) {
+                    toast(
+                        context,
+                        context.getString(if (checked) R.string.ads_toast_on else R.string.ads_toast_off),
+                    )
+                }
+            },
+        )
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -246,6 +264,35 @@ fun SettingsScreen(onOpenPerApps: () -> Unit) {
                 )
                 Text(
                     perAppSummary(context),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Spacer(Modifier.width(12.dp))
+            Icon(
+                Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Spacer(Modifier.height(8.dp))
+
+        // ---------------- statistics ----------------
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { onOpenStats() }
+                .padding(vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text(
+                    stringResource(R.string.stats_title),
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Text(
+                    stringResource(R.string.stats_entry_sub),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

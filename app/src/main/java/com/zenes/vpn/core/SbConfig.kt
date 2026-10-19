@@ -21,6 +21,11 @@ import org.json.JSONObject
  * assets): geosite category-ru + category-gov-ru domains and geoip ru
  * addresses go to "direct", everything else stays on "proxy". RU domains
  * are also resolved via dns-direct so apps get RU CDN answers.
+ *
+ * Ad blocking (blockAds) appends the bundled geosite-category-ads-all
+ * rule-set: matching domains are rejected at the DNS level (empty answer,
+ * the app never even starts the connection) and, as a safety net for
+ * apps with hardcoded DNS results, at the route level via SNI sniffing.
  */
 object SbConfig {
 
@@ -30,6 +35,7 @@ object SbConfig {
         excludePackages: List<String> = emptyList(),
         routingMode: String = Store.ROUTE_ALL,
         ruleSetDir: String? = null,
+        blockAds: Boolean = false,
     ): String {
         val root = JSONObject()
 
@@ -55,17 +61,28 @@ object SbConfig {
         dns.put("final", "dns-remote")
         dns.put("strategy", "prefer_ipv4")
         val smart = routingMode == Store.ROUTE_RU && !ruleSetDir.isNullOrBlank()
+        val ads = blockAds && !ruleSetDir.isNullOrBlank()
+        val dnsRules = JSONArray()
+        if (ads) {
+            // Must come before the RU-direct rule: a rejected domain never
+            // reaches the resolver.
+            dnsRules.put(
+                JSONObject()
+                    .put("rule_set", JSONArray().put("geosite-ads"))
+                    .put("action", "reject"),
+            )
+        }
         if (smart) {
             // Russian domains are resolved over the direct path, so RU CDNs
             // answer with RU addresses and the ISP sees nothing odd.
-            dns.put(
-                "rules",
-                JSONArray().put(
-                    JSONObject()
-                        .put("rule_set", JSONArray().put("geosite-ru").put("geosite-gov-ru"))
-                        .put("server", "dns-direct"),
-                ),
+            dnsRules.put(
+                JSONObject()
+                    .put("rule_set", JSONArray().put("geosite-ru").put("geosite-gov-ru"))
+                    .put("server", "dns-direct"),
             )
+        }
+        if (dnsRules.length() > 0) {
+            dns.put("rules", dnsRules)
         }
         root.put("dns", dns)
 
@@ -106,33 +123,40 @@ object SbConfig {
         val rules = JSONArray()
             .put(JSONObject().put("action", "sniff"))
             .put(JSONObject().put("protocol", "dns").put("action", "hijack-dns"))
-            .put(JSONObject().put("ip_is_private", true).put("outbound", "direct"))
-        if (smart) {
-            route.put(
-                "rule_set",
-                JSONArray()
-                    .put(
-                        JSONObject()
-                            .put("type", "local")
-                            .put("tag", "geosite-ru")
-                            .put("format", "binary")
-                            .put("path", "$ruleSetDir/category-ru.srs"),
-                    )
-                    .put(
-                        JSONObject()
-                            .put("type", "local")
-                            .put("tag", "geosite-gov-ru")
-                            .put("format", "binary")
-                            .put("path", "$ruleSetDir/category-gov-ru.srs"),
-                    )
-                    .put(
-                        JSONObject()
-                            .put("type", "local")
-                            .put("tag", "geoip-ru")
-                            .put("format", "binary")
-                            .put("path", "$ruleSetDir/geoip-ru.srs"),
-                    ),
+        if (ads) {
+            // Safety net for apps that bypassed DNS rejection with a hardcoded
+            // answer: the domain is still visible in TLS SNI after sniffing.
+            rules.put(
+                JSONObject()
+                    .put("rule_set", JSONArray().put("geosite-ads"))
+                    .put("action", "reject"),
             )
+        }
+        rules.put(JSONObject().put("ip_is_private", true).put("outbound", "direct"))
+        val routeRuleSets = JSONArray()
+        if (smart) {
+            routeRuleSets
+                .put(
+                    JSONObject()
+                        .put("type", "local")
+                        .put("tag", "geosite-ru")
+                        .put("format", "binary")
+                        .put("path", "$ruleSetDir/category-ru.srs"),
+                )
+                .put(
+                    JSONObject()
+                        .put("type", "local")
+                        .put("tag", "geosite-gov-ru")
+                        .put("format", "binary")
+                        .put("path", "$ruleSetDir/category-gov-ru.srs"),
+                )
+                .put(
+                    JSONObject()
+                        .put("type", "local")
+                        .put("tag", "geoip-ru")
+                        .put("format", "binary")
+                        .put("path", "$ruleSetDir/geoip-ru.srs"),
+                )
             rules
                 .put(
                     JSONObject()
@@ -144,6 +168,18 @@ object SbConfig {
                         .put("rule_set", JSONArray().put("geoip-ru"))
                         .put("outbound", "direct"),
                 )
+        }
+        if (ads) {
+            routeRuleSets.put(
+                JSONObject()
+                    .put("type", "local")
+                    .put("tag", "geosite-ads")
+                    .put("format", "binary")
+                    .put("path", "$ruleSetDir/category-ads-all.srs"),
+            )
+        }
+        if (routeRuleSets.length() > 0) {
+            route.put("rule_set", routeRuleSets)
         }
         route.put("rules", rules)
         route.put("final", "proxy")

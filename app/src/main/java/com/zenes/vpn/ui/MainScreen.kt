@@ -88,7 +88,11 @@ import io.nekohasekai.libbox.Libbox
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-fun MainScreen(onConnectToggle: () -> Unit, onGoServers: () -> Unit) {
+fun MainScreen(
+    onConnectToggle: () -> Unit,
+    onGoServers: () -> Unit,
+    onOpenStats: () -> Unit,
+) {
     val context = LocalContext.current
     val state by VpnStateBus.state.collectAsStateWithLifecycle()
     val uplink by VpnStateBus.uplink.collectAsStateWithLifecycle()
@@ -410,7 +414,8 @@ fun MainScreen(onConnectToggle: () -> Unit, onGoServers: () -> Unit) {
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(32.dp))
                             .background(MaterialTheme.colorScheme.surfaceVariant)
-                            .background(cardTintBrush()),
+                            .background(cardTintBrush())
+                            .clickable { onOpenStats() },
                     ) {
                         Row(
                             modifier = Modifier

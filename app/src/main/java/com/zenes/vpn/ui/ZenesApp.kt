@@ -97,20 +97,34 @@ fun ZenesApp(onConnectToggle: () -> Unit) {
             modifier = Modifier.padding(padding),
         ) {
             composable(Tab.Home.route) {
-                MainScreen(onConnectToggle = onConnectToggle, onGoServers = {
-                    navigateToTab(navController, Tab.Servers.route)
-                })
+                MainScreen(
+                    onConnectToggle = onConnectToggle,
+                    onGoServers = {
+                        navigateToTab(navController, Tab.Servers.route)
+                    },
+                    onOpenStats = {
+                        navController.navigate("stats") { launchSingleTop = true }
+                    },
+                )
             }
             composable(Tab.Servers.route) {
                 ServersScreen()
             }
             composable(Tab.Settings.route) {
-                SettingsScreen(onOpenPerApps = {
-                    navController.navigate("perapp") { launchSingleTop = true }
-                })
+                SettingsScreen(
+                    onOpenPerApps = {
+                        navController.navigate("perapp") { launchSingleTop = true }
+                    },
+                    onOpenStats = {
+                        navController.navigate("stats") { launchSingleTop = true }
+                    },
+                )
             }
             composable("perapp") {
                 PerAppScreen(onBack = { navController.popBackStack() })
+            }
+            composable("stats") {
+                StatsScreen(onBack = { navController.popBackStack() })
             }
         }
     }
