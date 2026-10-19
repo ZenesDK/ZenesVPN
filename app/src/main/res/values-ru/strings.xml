@@ -36,6 +36,7 @@
     <string name="from_subscription">Из подписки</string>
     <string name="clipboard_empty">Буфер обмена пуст или не содержит ссылок</string>
     <string name="imported_count">Добавлено серверов: %1$d</string>
+    <string name="import_none">В коде не найдено известных ссылок</string>
     <string name="delete_server">Удалить сервер?</string>
     <string name="delete">Удалить</string>
     <string name="cancel">Отмена</string>
@@ -107,6 +108,9 @@
 
     <!-- QR -->
     <string name="qr_prompt">Наведите рамку на QR-код со ссылкой на конфиг</string>
+    <string name="qr_torch">Фонарик</string>
+    <string name="qr_permission_denied">Для сканирования QR-кодов нужен доступ к камере — разрешите его в настройках системы.</string>
+    <string name="qr_camera_error">Не удалось запустить камеру.</string>
 
     <!-- Маршрутизация по приложениям -->
     <string name="perapp_title">Маршрутизация приложений</string>

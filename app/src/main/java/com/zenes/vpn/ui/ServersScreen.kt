@@ -1,7 +1,6 @@
 package com.zenes.vpn.ui
 
 import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -62,7 +61,6 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.google.zxing.integration.android.IntentIntegrator
 import com.zenes.vpn.R
 import com.zenes.vpn.bg.CrashLogger
 import com.zenes.vpn.data.ServerProfile
@@ -106,18 +104,23 @@ fun ServersScreen() {
         subs = Store(context).subs()
     }
 
-    val qrLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-        val scan = IntentIntegrator.parseActivityResult(result.resultCode, result.data)
-        val contents: String? = scan?.contents
+    val qrLauncher = rememberLauncherForActivityResult(QrScanContract()) { contents ->
         if (!contents.isNullOrBlank()) {
             CrashLogger.breadcrumb("qr scan ok: ${contents.length} chars (server import)")
             scope.launch {
                 val n = Importer.importText(context, contents)
-                toast(context, context.getString(R.string.imported_count, n))
+                toast(
+                    context,
+                    if (n > 0) {
+                        context.getString(R.string.imported_count, n)
+                    } else {
+                        context.getString(R.string.import_none)
+                    },
+                )
                 reload()
             }
         } else {
-            CrashLogger.breadcrumb("qr scan empty: resultCode=${result.resultCode} (server import)")
+            CrashLogger.breadcrumb("qr scan cancelled (server import)")
         }
     }
 
@@ -292,16 +295,8 @@ fun ServersScreen() {
                     iconTint = VividViolet,
                 ) {
                     showAddSheet = false
-                    val activity = context as? android.app.Activity
-                    if (activity != null) {
-                        CrashLogger.breadcrumb("qr scan opened (server import)")
-                        val integrator = IntentIntegrator(activity)
-                        integrator.setDesiredBarcodeFormats(IntentIntegrator.QR_CODE)
-                        integrator.setPrompt(context.getString(R.string.qr_prompt))
-                        integrator.setBeepEnabled(false)
-                        integrator.setOrientationLocked(true)
-                        qrLauncher.launch(integrator.createScanIntent())
-                    }
+                    CrashLogger.breadcrumb("qr scan opened (server import)")
+                    qrLauncher.launch(context.getString(R.string.qr_prompt))
                 }
                 SheetItem(
                     icon = Icons.Default.CloudDownload,

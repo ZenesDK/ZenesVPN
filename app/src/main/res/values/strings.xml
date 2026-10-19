@@ -36,6 +36,7 @@
     <string name="from_subscription">From subscription</string>
     <string name="clipboard_empty">Clipboard is empty or has no valid links</string>
     <string name="imported_count">Imported: %1$d server(s)</string>
+    <string name="import_none">No known links found in the code</string>
     <string name="delete_server">Delete server?</string>
     <string name="delete">Delete</string>
     <string name="cancel">Cancel</string>
@@ -107,6 +108,9 @@
 
     <!-- QR -->
     <string name="qr_prompt">Place a QR code with the config link inside the frame</string>
+    <string name="qr_torch">Flashlight</string>
+    <string name="qr_permission_denied">Camera access is needed to scan QR codes. Allow it in system settings.</string>
+    <string name="qr_camera_error">Could not start the camera.</string>
 
     <!-- Per-app routing -->
     <string name="perapp_title">App routing</string>

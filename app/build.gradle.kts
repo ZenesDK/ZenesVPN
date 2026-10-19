@@ -24,8 +24,14 @@ android {
         applicationId = "com.zenes.vpn"
         minSdk = 24
         targetSdk = 34
-        versionCode = 26
-        versionName = "1.10.3"
+        versionCode = 27
+        versionName = "1.10.4"
+        // Real phones are arm64-v8a / armeabi-v7a. Dropping the emulator-only
+        // x86 ABIs removes two libbox (~60 MB each) and two barhopper copies,
+        // making the in-app self-update download roughly twice as small.
+        ndk {
+            abiFilters += listOf("arm64-v8a", "armeabi-v7a")
+        }
     }
 
     signingConfigs {
@@ -104,6 +110,15 @@ dependencies {
     implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.navigation:navigation-compose:2.8.2")
 
-    implementation("com.journeyapps:zxing-android-embedded:4.3.0") { isTransitive = false }
+    // QR generation (backup code) — zxing core; scanning is done by QrScanActivity
+    // (CameraX + ML Kit), the zxing-embedded activity is no longer used.
     implementation("com.google.zxing:core:3.5.3")
+
+    val camerax = "1.4.2"
+    implementation("androidx.camera:camera-core:$camerax")
+    implementation("androidx.camera:camera-camera2:$camerax")
+    implementation("androidx.camera:camera-lifecycle:$camerax")
+    implementation("androidx.camera:camera-view:$camerax")
+    // Bundled on-device barcode model — no Google Play services required.
+    implementation("com.google.mlkit:barcode-scanning:17.3.0")
 }

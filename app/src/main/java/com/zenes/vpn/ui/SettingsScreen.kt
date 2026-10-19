@@ -65,7 +65,6 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.google.zxing.integration.android.IntentIntegrator
 import com.zenes.vpn.BuildConfig
 import com.zenes.vpn.R
 import com.zenes.vpn.bg.CrashLogger
@@ -173,18 +172,17 @@ fun SettingsScreen(onOpenPerApps: () -> Unit) {
     }
 
     val qrScanLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.StartActivityForResult(),
-    ) { result ->
-        val scan = IntentIntegrator.parseActivityResult(result.resultCode, result.data)
-        val text = Backup.fromQrPayload(scan?.contents)
+        QrScanContract(),
+    ) { contents ->
+        val text = Backup.fromQrPayload(contents)
         if (text != null) {
-            CrashLogger.breadcrumb("qr scan ok: ${scan.contents.length} chars (backup restore)")
+            CrashLogger.breadcrumb("qr scan ok: ${(contents?.length ?: 0)} chars (backup restore)")
             startRestore(text)
-        } else if (!scan?.contents.isNullOrBlank()) {
-            CrashLogger.breadcrumb("qr scan ok but not a backup payload: ${scan.contents.length} chars")
+        } else if (!contents.isNullOrBlank()) {
+            CrashLogger.breadcrumb("qr scan ok but not a backup payload: ${contents.length} chars")
             toast(context, context.getString(R.string.backup_invalid))
         } else {
-            CrashLogger.breadcrumb("qr scan empty: resultCode=${result.resultCode} (backup restore)")
+            CrashLogger.breadcrumb("qr scan cancelled (backup restore)")
         }
     }
 
@@ -468,16 +466,8 @@ fun SettingsScreen(onOpenPerApps: () -> Unit) {
             title = stringResource(R.string.backup_scan),
             subtitle = stringResource(R.string.backup_scan_sub),
         ) {
-            val activity = context as? android.app.Activity
-            if (activity != null) {
-                CrashLogger.breadcrumb("qr scan opened (backup restore)")
-                val integrator = IntentIntegrator(activity)
-                integrator.setDesiredBarcodeFormats(IntentIntegrator.QR_CODE)
-                integrator.setPrompt(context.getString(R.string.qr_prompt))
-                integrator.setBeepEnabled(false)
-                integrator.setOrientationLocked(true)
-                qrScanLauncher.launch(integrator.createScanIntent())
-            }
+            CrashLogger.breadcrumb("qr scan opened (backup restore)")
+            qrScanLauncher.launch(context.getString(R.string.qr_prompt))
         }
 
         // QR display dialog

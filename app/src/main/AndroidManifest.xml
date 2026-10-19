@@ -9,6 +9,7 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SYSTEM_EXEMPTED" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.VIBRATE" />
     <!-- In-app self-update: the app hands the downloaded APK to the system installer. -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <!-- Split tunneling UI lists installed apps (Android 11+ package visibility). -->
@@ -35,14 +36,12 @@
             </intent-filter>
         </activity>
 
-        <!-- QR scanner (zxing-android-embedded). The library manifest declares it
-             as sensorLandscape, and CaptureManager's runtime "orientation lock"
-             locks the CURRENT rotation — so the only reliable way to keep the
-             scanner portrait like the rest of the app is a manifest override. -->
+        <!-- In-app QR scanner (CameraX + ML Kit). Portrait like the rest of the app;
+             the zxing-embedded CaptureActivity (and its landscape manifest entry) is gone. -->
         <activity
-            android:name="com.journeyapps.barcodescanner.CaptureActivity"
-            android:screenOrientation="portrait"
-            tools:replace="android:screenOrientation" />
+            android:name=".ui.QrScanActivity"
+            android:exported="false"
+            android:screenOrientation="portrait" />
 
         <service
             android:name=".bg.ZenesVpnService"
