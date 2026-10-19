@@ -29,6 +29,8 @@ data class Subscription(
     val download: Long = 0,
     val total: Long = 0,
     val expire: Long = 0,
+    // "profile-update-interval" header from the provider, in hours (0 = not set).
+    val updateIntervalHours: Int = 0,
 ) {
     val used: Long get() = upload + download
 }
@@ -135,6 +137,31 @@ class Store(context: Context) {
         saveServers(servers().filterNot { it.subId == subId })
     }
 
+    /**
+     * Replaces the whole server set of a subscription with the freshly fetched
+     * profiles (providers rotate servers, so a refresh must not accumulate dead
+     * entries). Links that survive keep their id and measured ping, so the
+     * selected server survives rotation whenever its link is still offered.
+     * Servers imported manually (subId = null) are never touched.
+     */
+    fun replaceServersOfSub(subId: String, profiles: List<ServerProfile>): Int {
+        val old = servers()
+        val kept = old.filterNot { it.subId == subId }
+        val oldByLink = old.filter { it.subId == subId }.associateBy { it.link }
+        val merged = profiles.map { p ->
+            val previous = oldByLink[p.link]
+            if (previous != null) p.copy(id = previous.id, pingMs = previous.pingMs) else p
+        }
+        saveServers(kept + merged)
+        // Keep the selection valid if the selected server left the subscription.
+        val selected = selectedId()
+        if (selected != null && merged.none { it.id == selected } && kept.none { it.id == selected }) {
+            val first = servers().firstOrNull()
+            if (first != null) select(first.id) else prefs.edit().remove(KEY_SELECTED).apply()
+        }
+        return merged.size
+    }
+
     // ---------- subscriptions ----------
 
     fun subs(): List<Subscription> {
@@ -152,6 +179,7 @@ class Store(context: Context) {
                     download = o.optLong("download"),
                     total = o.optLong("total"),
                     expire = o.optLong("expire"),
+                    updateIntervalHours = o.optInt("updateIntervalHours"),
                 )
             }
         } catch (_: Throwable) {
@@ -171,7 +199,8 @@ class Store(context: Context) {
                     .put("upload", s.upload)
                     .put("download", s.download)
                     .put("total", s.total)
-                    .put("expire", s.expire),
+                    .put("expire", s.expire)
+                    .put("updateIntervalHours", s.updateIntervalHours),
             )
         }
         prefs.edit().putString(KEY_SUBS, arr.toString()).apply()
@@ -202,6 +231,18 @@ class Store(context: Context) {
     var killSwitchHint: Boolean
         get() = prefs.getBoolean(KEY_KILL_SWITCH, false)
         set(value) = prefs.edit().putBoolean(KEY_KILL_SWITCH, value).apply()
+
+    // ---------- subscription auto-update ----------
+
+    /** SUB_AUTO_OFF / SUB_AUTO_LAUNCH / SUB_AUTO_1H / SUB_AUTO_6H / SUB_AUTO_24H */
+    var subAutoUpdate: String
+        get() = prefs.getString(KEY_SUB_AUTO, SUB_AUTO_LAUNCH) ?: SUB_AUTO_LAUNCH
+        set(value) = prefs.edit().putString(KEY_SUB_AUTO, value).apply()
+
+    /** Last time the auto-updater actually ran (wall clock). */
+    var subAutoLastCheck: Long
+        get() = prefs.getLong(KEY_SUB_AUTO_LAST, 0)
+        set(value) = prefs.edit().putLong(KEY_SUB_AUTO_LAST, value).apply()
 
     /** Unix-ms of the last automatic update check (throttles Updater auto-check). */
     var lastUpdateCheck: Long
@@ -239,5 +280,13 @@ class Store(context: Context) {
         private const val KEY_PER_APP_MODE = "per_app_mode"
         private const val KEY_PER_APP_INCLUDE = "per_app_include"
         private const val KEY_PER_APP_EXCLUDE = "per_app_exclude"
+
+        const val SUB_AUTO_OFF = "off"
+        const val SUB_AUTO_LAUNCH = "launch"
+        const val SUB_AUTO_1H = "1h"
+        const val SUB_AUTO_6H = "6h"
+        const val SUB_AUTO_24H = "24h"
+        private const val KEY_SUB_AUTO = "sub_auto_update"
+        private const val KEY_SUB_AUTO_LAST = "sub_auto_last_check"
     }
 }

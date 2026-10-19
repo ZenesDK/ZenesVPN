@@ -130,6 +130,17 @@
     <string name="perapp_reconnecting">Переподключаю с новой маршрутизацией…</string>
 
     <!-- Информация о подписке -->
+    <!-- Subscription auto-update -->
+    <string name="section_subscriptions">Подписки</string>
+    <string name="sub_auto_update">Автообновление подписок</string>
+    <string name="sub_auto_desc">Обновляет списки серверов из ваших подписок автоматически. Рекомендованный провайдером интервал соблюдается.</string>
+    <string name="sub_auto_off">Выключено</string>
+    <string name="sub_auto_launch">При запуске приложения</string>
+    <string name="sub_auto_1h">Каждый час</string>
+    <string name="sub_auto_6h">Каждые 6 часов</string>
+    <string name="sub_auto_24h">Раз в сутки</string>
+    <string name="save">Сохранить</string>
+
     <string name="sub_info_used">Трафик: %1$s из %2$s</string>
     <string name="sub_info_unlimited">%1$s · безлимит</string>
     <string name="sub_info_expires">до %1$s · осталось %2$d дн.</string>

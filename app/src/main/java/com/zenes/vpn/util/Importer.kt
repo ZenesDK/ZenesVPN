@@ -65,13 +65,31 @@ object Importer {
             Store(context).addServers(profiles)
         }
 
-    /** Downloads a subscription URL, imports its content and stores metadata (traffic/expire/title). */
+    /**
+     * Downloads a subscription URL and REPLACES that subscription's server set
+     * with the fetched list (providers rotate servers, so a refresh must not
+     * accumulate dead entries). Links that survive keep their id and measured
+     * ping, so the selected server survives rotation whenever its link is
+     * still offered. A body with no usable links is reported as failure and
+     * leaves the previous server set untouched — a flaky fetch can never wipe
+     * the user's servers. Stores metadata (traffic/expire/title) as before.
+     */
     suspend fun importSubscription(context: Context, url: String): kotlin.Result<Int> =
         withContext(Dispatchers.IO) {
             try {
                 val fetched = fetchSubscription(url)
                 val store = Store(context)
                 val sub = store.subs().firstOrNull { it.url == url } ?: store.addSub("", url)
+                val profiles = mutableListOf<ServerProfile>()
+                for (link in LinkParser.extractLinks(fetched.body)) {
+                    val profile = LinkParser.parseLink(link) ?: continue
+                    profiles.add(profile.copy(subId = sub.id))
+                }
+                if (profiles.isEmpty()) {
+                    return@withContext kotlin.Result.failure(
+                        RuntimeException("subscription body has no usable links"),
+                    )
+                }
                 // If the name is still the auto-generated one, prefer the server-provided title.
                 val autoNamed = sub.name.isBlank() || sub.name == url.substringBefore("/")
                 val named = sub.copy(
@@ -80,11 +98,11 @@ object Importer {
                     download = fetched.download,
                     total = fetched.total,
                     expire = fetched.expire,
+                    updateIntervalHours = fetched.updateIntervalHours,
                 )
-                store.updateSub(named)
-                val count = importText(context, fetched.body, subId = sub.id)
+                val total = store.replaceServersOfSub(sub.id, profiles)
                 store.updateSub(named.copy(lastUpdate = System.currentTimeMillis()))
-                kotlin.Result.success(count)
+                kotlin.Result.success(total)
             } catch (t: Throwable) {
                 kotlin.Result.failure(t)
             }

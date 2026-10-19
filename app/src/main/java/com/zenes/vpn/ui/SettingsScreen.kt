@@ -24,6 +24,7 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.SystemUpdateAlt
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -31,6 +32,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -142,6 +144,92 @@ fun SettingsScreen(onOpenPerApps: () -> Unit) {
                 Icons.AutoMirrored.Filled.KeyboardArrowRight,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Spacer(Modifier.height(8.dp))
+
+        // ---------------- subscriptions ----------------
+        SectionLabel(stringResource(R.string.section_subscriptions))
+        var showSubAutoDialog by remember { mutableStateOf(false) }
+        var subAutoMode by remember { mutableStateOf(Store(context).subAutoUpdate) }
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { showSubAutoDialog = true }
+                .padding(vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text(
+                    stringResource(R.string.sub_auto_update),
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Text(
+                    subAutoModeLabel(context, subAutoMode),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Spacer(Modifier.width(12.dp))
+            Icon(
+                Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        if (showSubAutoDialog) {
+            val options = listOf(
+                Store.SUB_AUTO_OFF,
+                Store.SUB_AUTO_LAUNCH,
+                Store.SUB_AUTO_1H,
+                Store.SUB_AUTO_6H,
+                Store.SUB_AUTO_24H,
+            )
+            AlertDialog(
+                onDismissRequest = { showSubAutoDialog = false },
+                title = { Text(stringResource(R.string.sub_auto_update)) },
+                text = {
+                    Column {
+                        Text(
+                            stringResource(R.string.sub_auto_desc),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Spacer(Modifier.height(12.dp))
+                        options.forEach { option ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { subAutoMode = option }
+                                    .padding(vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                RadioButton(
+                                    selected = subAutoMode == option,
+                                    onClick = { subAutoMode = option },
+                                )
+                                Spacer(Modifier.width(8.dp))
+                                Text(
+                                    subAutoModeLabel(context, option),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                )
+                            }
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = {
+                        Store(context).subAutoUpdate = subAutoMode
+                        showSubAutoDialog = false
+                    }) { Text(stringResource(R.string.save)) }
+                },
+                dismissButton = {
+                    TextButton(onClick = {
+                        showSubAutoDialog = false
+                        subAutoMode = Store(context).subAutoUpdate
+                    }) { Text(stringResource(R.string.cancel)) }
+                },
             )
         }
         Spacer(Modifier.height(8.dp))
@@ -358,6 +446,16 @@ private fun perAppSummary(context: android.content.Context): String {
         else -> context.getString(R.string.perapp_summary_all)
     }
 }
+
+private fun subAutoModeLabel(context: android.content.Context, mode: String): String =
+    when (mode) {
+        Store.SUB_AUTO_OFF -> context.getString(R.string.sub_auto_off)
+        Store.SUB_AUTO_LAUNCH -> context.getString(R.string.sub_auto_launch)
+        Store.SUB_AUTO_1H -> context.getString(R.string.sub_auto_1h)
+        Store.SUB_AUTO_6H -> context.getString(R.string.sub_auto_6h)
+        Store.SUB_AUTO_24H -> context.getString(R.string.sub_auto_24h)
+        else -> context.getString(R.string.sub_auto_launch)
+    }
 
 @Composable
 private fun SectionLabel(text: String, dot: Color = MaterialTheme.colorScheme.primary) {

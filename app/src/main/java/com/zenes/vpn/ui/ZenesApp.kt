@@ -32,6 +32,7 @@ import com.zenes.vpn.R
 import com.zenes.vpn.bg.BoxClient
 import com.zenes.vpn.bg.VpnStateBus
 import com.zenes.vpn.core.Updater
+import com.zenes.vpn.util.SubscriptionUpdater
 
 sealed class Tab(val route: String, @StringRes val label: Int, val icon: ImageVector) {
     data object Home : Tab("home", R.string.nav_home, Icons.Default.Home)
@@ -69,6 +70,10 @@ fun ZenesApp(onConnectToggle: () -> Unit) {
         // Automatic update check (throttled to once per 4 h inside Updater);
         // if a new release exists, UpdateDialog pops up on any tab.
         Updater.checkAsync(appContext, auto = true)
+        // Automatic subscription refresh: runs a due pass now, then re-checks
+        // every 15 min while the app is alive; the interval itself is user
+        // configurable in Settings → Subscriptions (default: on app launch).
+        SubscriptionUpdater.start(appContext, this)
     }
 
     Scaffold(

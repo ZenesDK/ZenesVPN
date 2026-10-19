@@ -24,8 +24,8 @@ android {
         applicationId = "com.zenes.vpn"
         minSdk = 24
         targetSdk = 34
-        versionCode = 20
-        versionName = "1.8.1"
+        versionCode = 21
+        versionName = "1.9.0"
     }
 
     signingConfigs {
