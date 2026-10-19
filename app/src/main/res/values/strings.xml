@@ -91,6 +91,7 @@
     <string name="update_checking">Checking…</string>
     <string name="update_latest">You are on the latest version</string>
     <string name="update_available_short">Update %1$s is available</string>
+    <string name="update_whatsnew">What\'s new</string>
     <string name="update_available_title">Update available</string>
     <string name="update_available_text">ZenesVPN %1$s · %2$s\nDownload and install?</string>
     <string name="update_available_hint">The system installer will ask for a final confirmation.</string>

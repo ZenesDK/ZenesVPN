@@ -91,6 +91,7 @@
     <string name="update_checking">Проверка…</string>
     <string name="update_latest">Установлена последняя версия</string>
     <string name="update_available_short">Доступно обновление %1$s</string>
+    <string name="update_whatsnew">Что нового</string>
     <string name="update_available_title">Доступно обновление</string>
     <string name="update_available_text">ZenesVPN %1$s · %2$s\nСкачать и установить?</string>
     <string name="update_available_hint">Система попросит подтвердить установку — это обычная защита Android.</string>

@@ -52,6 +52,8 @@ object Updater {
             val version: String,
             val sizeBytes: Long,
             val url: String,
+            /** Raw release body (markdown changelog section) from GitHub. */
+            val notes: String = "",
         ) : State()
 
         data class Downloading(val percent: Int) : State()
@@ -191,7 +193,7 @@ object Updater {
                 }
             }
             if (url.isNullOrBlank()) throw Exception("release has no apk asset")
-            return State.Available(tag, size, url)
+            return State.Available(tag, size, url, json.optString("body"))
         } finally {
             conn.disconnect()
         }
@@ -243,6 +245,38 @@ object Updater {
             if (y != x) return y > x
         }
         return false
+    }
+
+    /**
+     * Turns the markdown changelog section (the release body) into readable
+     * plain text for the expandable "What's new" block:
+     * the "## [x.y.z] — date" header is dropped, "### Section" becomes a
+     * standalone label, "- item" becomes a bullet (nested items indent),
+     * and lines wrapped in the markdown source are rejoined to their bullet.
+     */
+    fun cleanReleaseNotes(raw: String): String {
+        if (raw.isBlank()) return ""
+        val out = StringBuilder()
+        for (rawLine in raw.lines()) {
+            val line = rawLine.trimEnd()
+            val t = line.trim()
+            val indent = line.length - line.trimStart().length
+            when {
+                t.isEmpty() -> out.append('\n')
+                t.startsWith("## ") -> Unit // release header (title + date) — skip
+                t.startsWith("### ") -> {
+                    if (out.isNotEmpty() && !out.endsWith("\n\n")) out.append('\n')
+                    out.append(t.removePrefix("### ")).append('\n')
+                }
+                t.startsWith("- ") -> {
+                    val bullet = if (indent >= 2) "   • " else "• "
+                    out.append(bullet).append(t.removePrefix("- ")).append('\n')
+                }
+                out.isEmpty() || out.endsWith("\n") -> out.append(t).append('\n')
+                else -> out.insert(out.length - 1, " $t") // wrapped continuation
+            }
+        }
+        return out.toString().replace(Regex("\n{3,}"), "\n\n").trim()
     }
 
     private fun parseVersion(v: String): List<Int> =
