@@ -178,9 +178,13 @@ fun SettingsScreen(onOpenPerApps: () -> Unit) {
         val scan = IntentIntegrator.parseActivityResult(result.resultCode, result.data)
         val text = Backup.fromQrPayload(scan?.contents)
         if (text != null) {
+            CrashLogger.breadcrumb("qr scan ok: ${scan.contents.length} chars (backup restore)")
             startRestore(text)
         } else if (!scan?.contents.isNullOrBlank()) {
+            CrashLogger.breadcrumb("qr scan ok but not a backup payload: ${scan.contents.length} chars")
             toast(context, context.getString(R.string.backup_invalid))
+        } else {
+            CrashLogger.breadcrumb("qr scan empty: resultCode=${result.resultCode} (backup restore)")
         }
     }
 
@@ -466,6 +470,7 @@ fun SettingsScreen(onOpenPerApps: () -> Unit) {
         ) {
             val activity = context as? android.app.Activity
             if (activity != null) {
+                CrashLogger.breadcrumb("qr scan opened (backup restore)")
                 val integrator = IntentIntegrator(activity)
                 integrator.setDesiredBarcodeFormats(IntentIntegrator.QR_CODE)
                 integrator.setPrompt(context.getString(R.string.qr_prompt))

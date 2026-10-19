@@ -64,6 +64,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.google.zxing.integration.android.IntentIntegrator
 import com.zenes.vpn.R
+import com.zenes.vpn.bg.CrashLogger
 import com.zenes.vpn.data.ServerProfile
 import com.zenes.vpn.data.Store
 import com.zenes.vpn.data.Subscription
@@ -109,11 +110,14 @@ fun ServersScreen() {
         val scan = IntentIntegrator.parseActivityResult(result.resultCode, result.data)
         val contents: String? = scan?.contents
         if (!contents.isNullOrBlank()) {
+            CrashLogger.breadcrumb("qr scan ok: ${contents.length} chars (server import)")
             scope.launch {
                 val n = Importer.importText(context, contents)
                 toast(context, context.getString(R.string.imported_count, n))
                 reload()
             }
+        } else {
+            CrashLogger.breadcrumb("qr scan empty: resultCode=${result.resultCode} (server import)")
         }
     }
 
@@ -290,6 +294,7 @@ fun ServersScreen() {
                     showAddSheet = false
                     val activity = context as? android.app.Activity
                     if (activity != null) {
+                        CrashLogger.breadcrumb("qr scan opened (server import)")
                         val integrator = IntentIntegrator(activity)
                         integrator.setDesiredBarcodeFormats(IntentIntegrator.QR_CODE)
                         integrator.setPrompt(context.getString(R.string.qr_prompt))
