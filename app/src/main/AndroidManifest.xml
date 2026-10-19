@@ -35,6 +35,15 @@
             </intent-filter>
         </activity>
 
+        <!-- QR scanner (zxing-android-embedded). The library manifest declares it
+             as sensorLandscape, and CaptureManager's runtime "orientation lock"
+             locks the CURRENT rotation — so the only reliable way to keep the
+             scanner portrait like the rest of the app is a manifest override. -->
+        <activity
+            android:name="com.journeyapps.barcodescanner.CaptureActivity"
+            android:screenOrientation="portrait"
+            tools:replace="android:screenOrientation" />
+
         <service
             android:name=".bg.ZenesVpnService"
             android:exported="false"
