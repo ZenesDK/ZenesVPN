@@ -1,6 +1,9 @@
 package com.zenes.vpn.ui
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
@@ -8,6 +11,14 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -34,7 +45,9 @@ import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.Dns
 import androidx.compose.material.icons.filled.PowerSettingsNew
 import androidx.compose.material3.Button
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -73,6 +86,7 @@ import com.zenes.vpn.ui.theme.cardTintBrush
 import com.zenes.vpn.ui.theme.heroBrush
 import io.nekohasekai.libbox.Libbox
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun MainScreen(onConnectToggle: () -> Unit, onGoServers: () -> Unit) {
     val context = LocalContext.current
@@ -141,6 +155,14 @@ fun MainScreen(onConnectToggle: () -> Unit, onGoServers: () -> Unit) {
                 animationSpec = spring(dampingRatio = 0.55f, stiffness = 380f),
                 label = "pressScale",
             )
+            // Expressive shape morph: while pressed the cookie's rounded corners
+            // pull further in, so the button visibly "squishes" under the finger.
+            val pressMorph by animateFloatAsState(
+                targetValue = if (pressed) 0.26f else 0.16f,
+                animationSpec = spring(dampingRatio = 0.6f, stiffness = 300f),
+                label = "pressMorph",
+            )
+            val faceShape = CookieShape(cornerFraction = pressMorph)
             val busy = state == VpnStateBus.State.CONNECTING || state == VpnStateBus.State.STOPPING
             // The halo always rotates: fast while busy, slow and calm otherwise.
             val spin = if (busy) {
@@ -182,7 +204,7 @@ fun MainScreen(onConnectToggle: () -> Unit, onGoServers: () -> Unit) {
                     VpnStateBus.State.ERROR -> VividRed
                     else -> MaterialTheme.colorScheme.onSurfaceVariant
                 },
-                animationSpec = tween(350),
+                animationSpec = spring(dampingRatio = 0.8f, stiffness = 380f),
                 label = "powerColor",
             )
 
@@ -216,32 +238,56 @@ fun MainScreen(onConnectToggle: () -> Unit, onGoServers: () -> Unit) {
                             interactionSource = interaction,
                             indication = null,
                         ) { onConnectToggle() }
-                        .background(MaterialTheme.colorScheme.surfaceVariant, CookieShape())
-                        .background(fillBrush, CookieShape()),
+                        .background(MaterialTheme.colorScheme.surfaceVariant, faceShape)
+                        .background(fillBrush, faceShape),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.PowerSettingsNew,
-                        contentDescription = stringResource(R.string.btn_connect),
-                        tint = accent,
-                        modifier = Modifier.size(96.dp),
-                    )
+                    // M3E: while connecting/stopping the power icon yields to the
+                    // expressive morphing loading indicator.
+                    AnimatedContent(
+                        targetState = busy,
+                        transitionSpec = {
+                            (fadeIn(tween(180)) + scaleIn(initialScale = 0.6f, animationSpec = tween(240)))
+                                .togetherWith(fadeOut(tween(140)))
+                        },
+                        label = "powerFace",
+                    ) { isBusy ->
+                        if (isBusy) {
+                            LoadingIndicator(color = accent, modifier = Modifier.size(88.dp))
+                        } else {
+                            Icon(
+                                imageVector = Icons.Default.PowerSettingsNew,
+                                contentDescription = stringResource(R.string.btn_connect),
+                                tint = accent,
+                                modifier = Modifier.size(96.dp),
+                            )
+                        }
+                    }
                 }
             }
 
             Spacer(Modifier.height(16.dp))
 
-            // status pill
+            // status pill — springy color, slide-up text transition
             Surface(
                 shape = RoundedCornerShape(50),
                 color = accent.copy(alpha = 0.14f),
             ) {
-                Text(
-                    text = statusText,
-                    style = MaterialTheme.typography.titleSmall,
-                    color = accent,
-                    modifier = Modifier.padding(horizontal = 18.dp, vertical = 7.dp),
-                )
+                AnimatedContent(
+                    targetState = statusText,
+                    transitionSpec = {
+                        (fadeIn(tween(160)) + slideInVertically(tween(220)) { it / 3 })
+                            .togetherWith(fadeOut(tween(120)) + slideOutVertically(tween(180)) { -it / 3 })
+                    },
+                    label = "statusText",
+                ) { text ->
+                    Text(
+                        text = text,
+                        style = MaterialTheme.typography.titleSmall,
+                        color = accent,
+                        modifier = Modifier.padding(horizontal = 18.dp, vertical = 7.dp),
+                    )
+                }
             }
 
             Spacer(Modifier.height(6.dp))
@@ -261,7 +307,7 @@ fun MainScreen(onConnectToggle: () -> Unit, onGoServers: () -> Unit) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(28.dp))
+                    .clip(RoundedCornerShape(32.dp))
                     .background(MaterialTheme.colorScheme.surfaceVariant)
                     .background(cardTintBrush()),
             ) {
@@ -317,7 +363,7 @@ fun MainScreen(onConnectToggle: () -> Unit, onGoServers: () -> Unit) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(28.dp))
+                        .clip(RoundedCornerShape(32.dp))
                         .background(heroBrush()),
                 ) {
                     Column(Modifier.padding(16.dp)) {
@@ -349,37 +395,45 @@ fun MainScreen(onConnectToggle: () -> Unit, onGoServers: () -> Unit) {
                 }
             }
 
-            // ------------- traffic card -------------
-            if (state == VpnStateBus.State.CONNECTED) {
-                Spacer(Modifier.height(12.dp))
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(28.dp))
-                        .background(MaterialTheme.colorScheme.surfaceVariant)
-                        .background(cardTintBrush()),
-                ) {
-                    Row(
+            // ------------- traffic card (springy expand/collapse) -------------
+            AnimatedVisibility(
+                visible = state == VpnStateBus.State.CONNECTED,
+                enter = fadeIn(tween(220)) +
+                    expandVertically(tween(280, easing = FastOutSlowInEasing)),
+                exit = fadeOut(tween(160)) +
+                    shrinkVertically(tween(240, easing = FastOutSlowInEasing)),
+            ) {
+                Column {
+                    Spacer(Modifier.height(12.dp))
+                    Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(16.dp),
-                        horizontalArrangement = Arrangement.SpaceEvenly,
-                        verticalAlignment = Alignment.CenterVertically,
+                            .clip(RoundedCornerShape(32.dp))
+                            .background(MaterialTheme.colorScheme.surfaceVariant)
+                            .background(cardTintBrush()),
                     ) {
-                        TrafficCell(
-                            icon = Icons.Default.ArrowUpward,
-                            tint = VividAmber,
-                            label = stringResource(R.string.upload_speed),
-                            speed = Libbox.formatBytes(uplink) + "/s",
-                            total = Libbox.formatBytes(uplinkTotal),
-                        )
-                        TrafficCell(
-                            icon = Icons.Default.ArrowDownward,
-                            tint = VividCyan,
-                            label = stringResource(R.string.download_speed),
-                            speed = Libbox.formatBytes(downlink) + "/s",
-                            total = Libbox.formatBytes(downlinkTotal),
-                        )
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            horizontalArrangement = Arrangement.SpaceEvenly,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            TrafficCell(
+                                icon = Icons.Default.ArrowUpward,
+                                tint = VividAmber,
+                                label = stringResource(R.string.upload_speed),
+                                speed = Libbox.formatBytes(uplink) + "/s",
+                                total = Libbox.formatBytes(uplinkTotal),
+                            )
+                            TrafficCell(
+                                icon = Icons.Default.ArrowDownward,
+                                tint = VividCyan,
+                                label = stringResource(R.string.download_speed),
+                                speed = Libbox.formatBytes(downlink) + "/s",
+                                total = Libbox.formatBytes(downlinkTotal),
+                            )
+                        }
                     }
                 }
             }

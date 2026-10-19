@@ -1,6 +1,5 @@
 package com.zenes.vpn.ui.theme
 
-import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
@@ -9,52 +8,73 @@ import androidx.compose.material3.MotionScheme
 import androidx.compose.material3.Shapes
 import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.dynamicDarkColorScheme
-import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
+/**
+ * Brand "Aurora" schemes, locked to the Zenes identity (the app icon gradient
+ * #8A7BFF -> #4E3ED9). Dynamic (wallpaper) color was dropped on purpose: the
+ * expressive gradients/chips across the app use fixed vivid anchors, and a
+ * wallpaper-driven primary clashed with them. A fixed brand scheme also makes
+ * the app look the same on every device — the Material 3 Expressive reference.
+ */
 private val DarkScheme = darkColorScheme(
-    primary = Color(0xFF7C9EFF),
-    onPrimary = Color(0xFF0A1730),
-    primaryContainer = Color(0xFF2A3A5C),
-    onPrimaryContainer = Color(0xFFD6E1FF),
-    secondary = Color(0xFF9FCAFF),
-    onSecondary = Color(0xFF00325A),
-    secondaryContainer = Color(0xFF2A4A78),
-    onSecondaryContainer = Color(0xFFD0E4FF),
-    tertiary = Color(0xFF67D8B4),
-    onTertiary = Color(0xFF003827),
-    tertiaryContainer = Color(0xFF1F5A43),
-    onTertiaryContainer = Color(0xFF86F5CE),
-    background = Color(0xFF0F1216),
-    onBackground = Color(0xFFE2E2E9),
-    surface = Color(0xFF171B22),
-    onSurface = Color(0xFFE2E2E9),
-    surfaceVariant = Color(0xFF232936),
-    onSurfaceVariant = Color(0xFFB9C2D4),
-    outline = Color(0xFF565C68),
+    primary = Color(0xFFCBBEFF),
+    onPrimary = Color(0xFF3A0091),
+    primaryContainer = Color(0xFF5433B8),
+    onPrimaryContainer = Color(0xFFE7DEFF),
+    secondary = Color(0xFFC9C3DD),
+    onSecondary = Color(0xFF322D47),
+    secondaryContainer = Color(0xFF484264),
+    onSecondaryContainer = Color(0xFFE6DFFA),
+    tertiary = Color(0xFF85D5C6),
+    onTertiary = Color(0xFF00382F),
+    tertiaryContainer = Color(0xFF005043),
+    onTertiaryContainer = Color(0xFFA1F2E1),
     error = Color(0xFFFFB4AB),
     onError = Color(0xFF690005),
+    errorContainer = Color(0xFF93000A),
+    onErrorContainer = Color(0xFFFFDAD6),
+    background = Color(0xFF0F0D17),
+    onBackground = Color(0xFFE7E1F4),
+    surface = Color(0xFF131019),
+    onSurface = Color(0xFFE7E1F4),
+    surfaceVariant = Color(0xFF221C30),
+    onSurfaceVariant = Color(0xFFCBC4D9),
+    outline = Color(0xFF948FA3),
+    outlineVariant = Color(0xFF484154),
 )
 
 private val LightScheme = lightColorScheme(
-    primary = Color(0xFF3E5FC0),
+    primary = Color(0xFF5B3FD1),
     onPrimary = Color.White,
-    primaryContainer = Color(0xFFD9E2FF),
-    onPrimaryContainer = Color(0xFF00174B),
-    background = Color(0xFFFBF8FF),
-    onBackground = Color(0xFF1A1B21),
-    surface = Color(0xFFFFFFFF),
-    onSurface = Color(0xFF1A1B21),
-    surfaceVariant = Color(0xFFE1E2EC),
-    onSurfaceVariant = Color(0xFF44474F),
+    primaryContainer = Color(0xFFE6DEFF),
+    onPrimaryContainer = Color(0xFF1C0063),
+    secondary = Color(0xFF615B78),
+    onSecondary = Color.White,
+    secondaryContainer = Color(0xFFE7DFF8),
+    onSecondaryContainer = Color(0xFF1D192C),
+    tertiary = Color(0xFF1F6B5C),
+    onTertiary = Color.White,
+    tertiaryContainer = Color(0xFFA7F2E0),
+    onTertiaryContainer = Color(0xFF00201A),
+    error = Color(0xFFBA1A1A),
+    onError = Color.White,
+    errorContainer = Color(0xFFFFDAD6),
+    onErrorContainer = Color(0xFF410002),
+    background = Color(0xFFFDF8FF),
+    onBackground = Color(0xFF1B1A22),
+    surface = Color(0xFFFDF8FF),
+    onSurface = Color(0xFF1B1A22),
+    surfaceVariant = Color(0xFFE6E1F0),
+    onSurfaceVariant = Color(0xFF484551),
+    outline = Color(0xFF787481),
+    outlineVariant = Color(0xFFC9C5D4),
 )
 
 /** Heavier, more expressive type scale. */
@@ -77,13 +97,7 @@ private val ExpressiveShapes = Shapes(
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun ZenesTheme(content: @Composable () -> Unit) {
-    val dark = isSystemInDarkTheme()
-    val context = LocalContext.current
-    val scheme = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-        if (dark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
-    } else {
-        if (dark) DarkScheme else LightScheme
-    }
+    val scheme = if (isSystemInDarkTheme()) DarkScheme else LightScheme
     MaterialExpressiveTheme(
         colorScheme = scheme,
         motionScheme = MotionScheme.expressive(),

@@ -556,7 +556,7 @@ fun SettingsScreen(onOpenPerApps: () -> Unit) {
         // ---------------- diagnostics ----------------
         SectionLabel(stringResource(R.string.section_diagnostics), dot = VividCyan)
         Card(
-            shape = RoundedCornerShape(20.dp),
+            shape = RoundedCornerShape(24.dp),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
             modifier = Modifier.fillMaxWidth(),
         ) {
@@ -653,7 +653,7 @@ fun SettingsScreen(onOpenPerApps: () -> Unit) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(20.dp))
+                .clip(RoundedCornerShape(24.dp))
                 .background(MaterialTheme.colorScheme.surfaceVariant)
                 .background(cardTintBrush()),
         ) {
@@ -698,7 +698,7 @@ fun SettingsScreen(onOpenPerApps: () -> Unit) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(20.dp))
+                .clip(RoundedCornerShape(24.dp))
                 .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
                 .clickable {
                     if (updateState !is Updater.State.Checking &&

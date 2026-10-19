@@ -45,7 +45,7 @@ fun protocolColor(proto: String): Color = when (proto.lowercase().trim()) {
 /** Diagonal hero gradient used by subscription cards (white content on top). */
 @Composable
 fun heroBrush(): Brush = Brush.linearGradient(
-    colors = listOf(VividBlue, VividViolet, VividPink),
+    colors = listOf(VividViolet, VividBlue, VividPink),
 )
 
 /**

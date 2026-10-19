@@ -67,6 +67,7 @@ import com.zenes.vpn.data.ServerProfile
 import com.zenes.vpn.data.Store
 import com.zenes.vpn.data.Subscription
 import com.zenes.vpn.parser.LinkParser
+import com.zenes.vpn.ui.theme.CookieShape
 import com.zenes.vpn.ui.theme.VividAmber
 import com.zenes.vpn.ui.theme.VividCyan
 import com.zenes.vpn.ui.theme.VividViolet
@@ -164,13 +165,25 @@ fun ServersScreen() {
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center,
                 ) {
-                    Icon(
-                        Icons.Default.Dns,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(72.dp),
-                    )
-                    Spacer(Modifier.height(16.dp))
+                    // Expressive geometric empty state: the icon sits inside a
+                    // soft "cookie" container instead of floating bare.
+                    Box(
+                        modifier = Modifier
+                            .size(128.dp)
+                            .background(
+                                MaterialTheme.colorScheme.primaryContainer,
+                                CookieShape(sides = 6, cornerFraction = 0.22f),
+                            ),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            Icons.Default.Dns,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                            modifier = Modifier.size(56.dp),
+                        )
+                    }
+                    Spacer(Modifier.height(20.dp))
                     Text(
                         stringResource(R.string.servers_empty),
                         style = MaterialTheme.typography.bodyLarge,
@@ -401,7 +414,7 @@ private fun SubscriptionCard(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(22.dp))
+            .clip(RoundedCornerShape(26.dp))
             .background(heroBrush()),
     ) {
         Row(
@@ -457,7 +470,7 @@ private fun ServerCard(
     onPing: () -> Unit,
     onDelete: () -> Unit,
 ) {
-    val shape = RoundedCornerShape(20.dp)
+    val shape = RoundedCornerShape(24.dp)
     Surface(
         shape = shape,
         color = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
@@ -547,7 +560,7 @@ private fun ServerCard(
 @Composable
 private fun SheetItem(icon: ImageVector, label: String, iconTint: Color = MaterialTheme.colorScheme.primary, onClick: () -> Unit) {
     Surface(
-        shape = RoundedCornerShape(18.dp),
+        shape = RoundedCornerShape(20.dp),
         color = MaterialTheme.colorScheme.surfaceVariant,
         modifier = Modifier
             .fillMaxWidth()
