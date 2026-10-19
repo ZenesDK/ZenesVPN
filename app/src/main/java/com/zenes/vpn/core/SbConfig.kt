@@ -1,6 +1,7 @@
 package com.zenes.vpn.core
 
 import com.zenes.vpn.data.ServerProfile
+import com.zenes.vpn.data.Store
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -14,6 +15,12 @@ import org.json.JSONObject
  * profiles: sing-box carries those lists through the tun options to
  * TunOptions, and the VPN service applies them to VpnService.Builder in
  * openTun(). Android applies include and exclude exclusively, include wins.
+ *
+ * Smart RU routing (Store.ROUTE_RU) appends three bundled local rule-sets
+ * (sing-geosite/sing-geoip "rule-set" branches, binary .srs, copied from
+ * assets): geosite category-ru + category-gov-ru domains and geoip ru
+ * addresses go to "direct", everything else stays on "proxy". RU domains
+ * are also resolved via dns-direct so apps get RU CDN answers.
  */
 object SbConfig {
 
@@ -21,6 +28,8 @@ object SbConfig {
         profile: ServerProfile,
         includePackages: List<String> = emptyList(),
         excludePackages: List<String> = emptyList(),
+        routingMode: String = Store.ROUTE_ALL,
+        ruleSetDir: String? = null,
     ): String {
         val root = JSONObject()
 
@@ -45,6 +54,19 @@ object SbConfig {
         dns.put("servers", dnsServers)
         dns.put("final", "dns-remote")
         dns.put("strategy", "prefer_ipv4")
+        val smart = routingMode == Store.ROUTE_RU && !ruleSetDir.isNullOrBlank()
+        if (smart) {
+            // Russian domains are resolved over the direct path, so RU CDNs
+            // answer with RU addresses and the ISP sees nothing odd.
+            dns.put(
+                "rules",
+                JSONArray().put(
+                    JSONObject()
+                        .put("rule_set", JSONArray().put("geosite-ru").put("geosite-gov-ru"))
+                        .put("server", "dns-direct"),
+                ),
+            )
+        }
         root.put("dns", dns)
 
         // ---------------- inbound ----------------
@@ -81,13 +103,49 @@ object SbConfig {
         val route = JSONObject()
         route.put("auto_detect_interface", true)
         route.put("default_domain_resolver", "dns-direct")
-        route.put(
-            "rules",
-            JSONArray()
-                .put(JSONObject().put("action", "sniff"))
-                .put(JSONObject().put("protocol", "dns").put("action", "hijack-dns"))
-                .put(JSONObject().put("ip_is_private", true).put("outbound", "direct")),
-        )
+        val rules = JSONArray()
+            .put(JSONObject().put("action", "sniff"))
+            .put(JSONObject().put("protocol", "dns").put("action", "hijack-dns"))
+            .put(JSONObject().put("ip_is_private", true).put("outbound", "direct"))
+        if (smart) {
+            route.put(
+                "rule_set",
+                JSONArray()
+                    .put(
+                        JSONObject()
+                            .put("type", "local")
+                            .put("tag", "geosite-ru")
+                            .put("format", "binary")
+                            .put("path", "$ruleSetDir/category-ru.srs"),
+                    )
+                    .put(
+                        JSONObject()
+                            .put("type", "local")
+                            .put("tag", "geosite-gov-ru")
+                            .put("format", "binary")
+                            .put("path", "$ruleSetDir/category-gov-ru.srs"),
+                    )
+                    .put(
+                        JSONObject()
+                            .put("type", "local")
+                            .put("tag", "geoip-ru")
+                            .put("format", "binary")
+                            .put("path", "$ruleSetDir/geoip-ru.srs"),
+                    ),
+            )
+            rules
+                .put(
+                    JSONObject()
+                        .put("rule_set", JSONArray().put("geosite-ru").put("geosite-gov-ru"))
+                        .put("outbound", "direct"),
+                )
+                .put(
+                    JSONObject()
+                        .put("rule_set", JSONArray().put("geoip-ru"))
+                        .put("outbound", "direct"),
+                )
+        }
+        route.put("rules", rules)
         route.put("final", "proxy")
         root.put("route", route)
 

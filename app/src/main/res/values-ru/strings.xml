@@ -148,6 +148,36 @@
     <string name="sub_info_expired">Подписка истекла</string>
     <string name="home_subscription">Подписка</string>
 
+    <!-- Маршрутизация трафика -->
+    <string name="route_title">Маршрутизация трафика</string>
+    <string name="route_summary_all">Весь трафик через VPN</string>
+    <string name="route_summary_ru">Умная: российские сайты напрямую</string>
+    <string name="route_mode_all">Весь трафик через VPN</string>
+    <string name="route_mode_all_desc">Как раньше: всё через VPN.</string>
+    <string name="route_mode_ru">Умная (российские сайты напрямую)</string>
+    <string name="route_mode_ru_desc">Российские сайты и сервисы (банки, Госуслуги, Яндекс, VK) идут напрямую; всё остальное — через VPN. Заблокированные ресурсы открываются как обычно.</string>
+
+    <!-- Резервная копия -->
+    <string name="section_backup">Резервная копия</string>
+    <string name="backup_export">Экспорт в файл</string>
+    <string name="backup_export_sub">Сохранить серверы, подписки и настройки в JSON-файл</string>
+    <string name="backup_qr">Показать QR-код</string>
+    <string name="backup_qr_sub">Перенести данные на другой телефон — отсканируйте код там</string>
+    <string name="backup_import">Импорт из файла</string>
+    <string name="backup_import_sub">Восстановить из сохранённой резервной копии</string>
+    <string name="backup_scan">Сканировать QR-код</string>
+    <string name="backup_scan_sub">Наведите камеру на код с другого устройства</string>
+    <string name="backup_saved">Резервная копия сохранена</string>
+    <string name="backup_invalid">Это не резервная копия ZenesVPN</string>
+    <string name="backup_qr_too_big">Слишком много данных для QR-кода — используйте экспорт в файл</string>
+    <string name="backup_qr_hint">На другом телефоне: ZenesVPN → Настройки → Резервная копия → Сканировать QR-код</string>
+    <string name="backup_confirm_title">Восстановить копию?</string>
+    <string name="backup_action_restore">Восстановить</string>
+    <string name="backup_confirm_text">Серверов: %1$d, подписок: %2$d.\nТекущие серверы, подписки и настройки будут заменены.</string>
+    <string name="backup_restored">Восстановлено: серверов %1$d, подписок %2$d</string>
+    <string name="backup_qr_saved">QR-код сохранён</string>
+    <string name="backup_file_name">zenes-backup.json</string>
+
     <!-- Журнал ошибок -->
     <string name="crash_expand">Развернуть</string>
     <string name="crash_collapse">Свернуть</string>

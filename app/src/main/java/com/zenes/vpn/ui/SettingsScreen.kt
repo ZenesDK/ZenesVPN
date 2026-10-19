@@ -1,9 +1,13 @@
 package com.zenes.vpn.ui
 
 import android.content.Intent
+import android.graphics.Bitmap
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -23,6 +27,11 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.DeleteOutline
+import androidx.compose.material.icons.filled.FolderOpen
+import androidx.compose.material.icons.filled.QrCode2
+import androidx.compose.material.icons.filled.QrCodeScanner
+import androidx.compose.material.icons.filled.Route
+import androidx.compose.material.icons.filled.SaveAlt
 import androidx.compose.material.icons.filled.SystemUpdateAlt
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
@@ -41,11 +50,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -54,17 +65,28 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.google.zxing.integration.android.IntentIntegrator
 import com.zenes.vpn.BuildConfig
 import com.zenes.vpn.R
 import com.zenes.vpn.bg.CrashLogger
 import com.zenes.vpn.core.Updater
 import com.zenes.vpn.data.Store
+import com.zenes.vpn.ui.theme.VividAmber
+import com.zenes.vpn.ui.theme.VividBlue
 import com.zenes.vpn.ui.theme.VividCyan
 import com.zenes.vpn.ui.theme.VividPink
+import com.zenes.vpn.ui.theme.VividViolet
 import com.zenes.vpn.ui.theme.cardTintBrush
+import com.zenes.vpn.util.Backup
 import com.zenes.vpn.util.toast
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.nekohasekai.libbox.Libbox
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 @Composable
 fun SettingsScreen(onOpenPerApps: () -> Unit) {
@@ -74,6 +96,93 @@ fun SettingsScreen(onOpenPerApps: () -> Unit) {
     var autostart by remember { mutableStateOf(Store(context).autostart) }
     var killSwitch by remember { mutableStateOf(Store(context).killSwitchHint) }
     var crashLog by remember { mutableStateOf(CrashLogger.fullReport()) }
+    val scope = rememberCoroutineScope()
+
+    // ---------------- backup state & launchers ----------------
+    var showQrDialog by remember { mutableStateOf(false) }
+    var qrImage by remember { mutableStateOf<Bitmap?>(null) }
+    var pendingRestore by remember { mutableStateOf<String?>(null) }
+    var pendingSummary by remember { mutableStateOf<Backup.Summary?>(null) }
+    val stampFormat = remember { SimpleDateFormat("yyyyMMdd_HHmm", Locale.getDefault()) }
+
+    fun startRestore(text: String) {
+        val summary = Backup.parse(text)
+        if (summary == null) {
+            toast(context, context.getString(R.string.backup_invalid))
+        } else {
+            pendingRestore = text
+            pendingSummary = summary
+        }
+    }
+
+    val exportLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/json"),
+    ) { uri ->
+        if (uri != null) {
+            scope.launch {
+                try {
+                    val text = Backup.buildJson(context)
+                    withContext(Dispatchers.IO) {
+                        context.contentResolver.openOutputStream(uri)?.use {
+                            it.write(text.toByteArray(Charsets.UTF_8))
+                        }
+                    }
+                    toast(context, context.getString(R.string.backup_saved))
+                } catch (t: Throwable) {
+                    toast(context, t.message ?: "?")
+                }
+            }
+        }
+    }
+
+    val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) {
+            scope.launch {
+                val text = runCatching {
+                    withContext(Dispatchers.IO) {
+                        context.contentResolver.openInputStream(uri)?.use {
+                            it.readBytes().toString(Charsets.UTF_8)
+                        }
+                    }
+                }.getOrNull()
+                if (text == null) {
+                    toast(context, context.getString(R.string.backup_invalid))
+                } else {
+                    startRestore(text)
+                }
+            }
+        }
+    }
+
+    val pngLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("image/png"),
+    ) { uri ->
+        val bmp = qrImage
+        if (uri != null && bmp != null) {
+            scope.launch {
+                runCatching {
+                    withContext(Dispatchers.IO) {
+                        context.contentResolver.openOutputStream(uri)?.use {
+                            bmp.compress(Bitmap.CompressFormat.PNG, 100, it)
+                        }
+                    }
+                }.onSuccess { toast(context, context.getString(R.string.backup_qr_saved)) }
+                    .onFailure { toast(context, it.message ?: "?") }
+            }
+        }
+    }
+
+    val qrScanLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartActivityForResult(),
+    ) { result ->
+        val scan = IntentIntegrator.parseActivityResult(result.resultCode, result.data)
+        val text = Backup.fromQrPayload(scan?.contents)
+        if (text != null) {
+            startRestore(text)
+        } else if (!scan?.contents.isNullOrBlank()) {
+            toast(context, context.getString(R.string.backup_invalid))
+        }
+    }
 
     Column(
         modifier = Modifier
@@ -144,6 +253,85 @@ fun SettingsScreen(onOpenPerApps: () -> Unit) {
                 Icons.AutoMirrored.Filled.KeyboardArrowRight,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Spacer(Modifier.height(8.dp))
+
+        // ---------------- traffic routing ----------------
+        var routeMode by remember { mutableStateOf(Store(context).routingMode) }
+        var showRouteDialog by remember { mutableStateOf(false) }
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { showRouteDialog = true }
+                .padding(vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                Icons.Default.Route,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+            )
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text(
+                    stringResource(R.string.route_title),
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Text(
+                    if (routeMode == Store.ROUTE_RU) {
+                        stringResource(R.string.route_summary_ru)
+                    } else {
+                        stringResource(R.string.route_summary_all)
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Spacer(Modifier.width(12.dp))
+            Icon(
+                Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        if (showRouteDialog) {
+            AlertDialog(
+                onDismissRequest = { showRouteDialog = false },
+                title = { Text(stringResource(R.string.route_title)) },
+                text = {
+                    Column {
+                        RouteOption(
+                            mode = Store.ROUTE_ALL,
+                            selected = routeMode,
+                            onSelect = { routeMode = it },
+                        )
+                        RouteOption(
+                            mode = Store.ROUTE_RU,
+                            selected = routeMode,
+                            onSelect = { routeMode = it },
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            stringResource(R.string.perapp_apply_hint),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = {
+                        Store(context).routingMode = routeMode
+                        showRouteDialog = false
+                    }) { Text(stringResource(R.string.save)) }
+                },
+                dismissButton = {
+                    TextButton(onClick = {
+                        showRouteDialog = false
+                        routeMode = Store(context).routingMode
+                    }) { Text(stringResource(R.string.cancel)) }
+                },
             )
         }
         Spacer(Modifier.height(8.dp))
@@ -229,6 +417,142 @@ fun SettingsScreen(onOpenPerApps: () -> Unit) {
                         showSubAutoDialog = false
                         subAutoMode = Store(context).subAutoUpdate
                     }) { Text(stringResource(R.string.cancel)) }
+                },
+            )
+        }
+        Spacer(Modifier.height(8.dp))
+
+        // ---------------- backup ----------------
+        SectionLabel(stringResource(R.string.section_backup), dot = VividViolet)
+        BackupRow(
+            icon = Icons.Default.SaveAlt,
+            tint = VividBlue,
+            title = stringResource(R.string.backup_export),
+            subtitle = stringResource(R.string.backup_export_sub),
+        ) {
+            exportLauncher.launch(
+                context.getString(R.string.backup_file_name).replace(".json", "-${stampFormat.format(Date())}.json"),
+            )
+        }
+        BackupRow(
+            icon = Icons.Default.QrCode2,
+            tint = VividCyan,
+            title = stringResource(R.string.backup_qr),
+            subtitle = stringResource(R.string.backup_qr_sub),
+        ) {
+            scope.launch {
+                val payload = runCatching { Backup.qrPayload(context) }.getOrNull()
+                if (payload == null) {
+                    toast(context, context.getString(R.string.backup_qr_too_big))
+                } else {
+                    qrImage = withContext(Dispatchers.IO) { Backup.qrBitmap(payload, 900) }
+                    showQrDialog = true
+                }
+            }
+        }
+        BackupRow(
+            icon = Icons.Default.FolderOpen,
+            tint = VividAmber,
+            title = stringResource(R.string.backup_import),
+            subtitle = stringResource(R.string.backup_import_sub),
+        ) {
+            importLauncher.launch(arrayOf("application/json", "text/*", "*/*"))
+        }
+        BackupRow(
+            icon = Icons.Default.QrCodeScanner,
+            tint = VividViolet,
+            title = stringResource(R.string.backup_scan),
+            subtitle = stringResource(R.string.backup_scan_sub),
+        ) {
+            val activity = context as? android.app.Activity
+            if (activity != null) {
+                val integrator = IntentIntegrator(activity)
+                integrator.setDesiredBarcodeFormats(IntentIntegrator.QR_CODE)
+                integrator.setPrompt(context.getString(R.string.qr_prompt))
+                integrator.setBeepEnabled(false)
+                integrator.setOrientationLocked(true)
+                qrScanLauncher.launch(integrator.createScanIntent())
+            }
+        }
+
+        // QR display dialog
+        if (showQrDialog && qrImage != null) {
+            AlertDialog(
+                onDismissRequest = { showQrDialog = false; qrImage = null },
+                title = { Text(stringResource(R.string.backup_qr)) },
+                text = {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Image(
+                            bitmap = qrImage!!.asImageBitmap(),
+                            contentDescription = stringResource(R.string.backup_qr),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(16.dp)),
+                        )
+                        Spacer(Modifier.height(12.dp))
+                        Text(
+                            stringResource(R.string.backup_qr_hint),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = { pngLauncher.launch("zenes-qr.png") }) {
+                        Text(stringResource(R.string.save))
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showQrDialog = false; qrImage = null }) {
+                        Text(stringResource(R.string.cancel))
+                    }
+                },
+            )
+        }
+
+        // Restore confirmation dialog
+        if (pendingRestore != null && pendingSummary != null) {
+            val summary = pendingSummary!!
+            AlertDialog(
+                onDismissRequest = { pendingRestore = null; pendingSummary = null },
+                title = { Text(stringResource(R.string.backup_confirm_title)) },
+                text = {
+                    Text(
+                        stringResource(
+                            R.string.backup_confirm_text,
+                            summary.servers,
+                            summary.subs,
+                        ),
+                    )
+                },
+                confirmButton = {
+                    TextButton(onClick = {
+                        val text = pendingRestore!!
+                        pendingRestore = null
+                        pendingSummary = null
+                        scope.launch {
+                            val restored = withContext(Dispatchers.IO) {
+                                Backup.restore(context, text)
+                            }
+                            if (restored == null) {
+                                toast(context, context.getString(R.string.backup_invalid))
+                            } else {
+                                toast(
+                                    context,
+                                    context.getString(
+                                        R.string.backup_restored,
+                                        restored.servers,
+                                        restored.subs,
+                                    ),
+                                )
+                            }
+                        }
+                    }) { Text(stringResource(R.string.backup_action_restore)) }
+                },
+                dismissButton = {
+                    TextButton(onClick = { pendingRestore = null; pendingSummary = null }) {
+                        Text(stringResource(R.string.cancel))
+                    }
                 },
             )
         }
@@ -420,6 +744,67 @@ fun SettingsScreen(onOpenPerApps: () -> Unit) {
             }
         }
         Spacer(Modifier.height(24.dp))
+    }
+}
+
+@Composable
+private fun RouteOption(mode: String, selected: String, onSelect: (String) -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onSelect(mode) }
+            .padding(vertical = 8.dp),
+        verticalAlignment = Alignment.Top,
+    ) {
+        RadioButton(selected = selected == mode, onClick = { onSelect(mode) })
+        Spacer(Modifier.width(8.dp))
+        Column {
+            Text(
+                text = if (mode == Store.ROUTE_RU) {
+                    stringResource(R.string.route_mode_ru)
+                } else {
+                    stringResource(R.string.route_mode_all)
+                },
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            Text(
+                text = if (mode == Store.ROUTE_RU) {
+                    stringResource(R.string.route_mode_ru_desc)
+                } else {
+                    stringResource(R.string.route_mode_all_desc)
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+@Composable
+private fun BackupRow(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    tint: Color,
+    title: String,
+    subtitle: String,
+    onClick: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(icon, contentDescription = null, tint = tint)
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Text(title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+            Text(
+                subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
     }
 }
 

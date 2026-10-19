@@ -37,12 +37,18 @@ object ConfigWriter {
                     exclude = emptyList()
                 }
             }
-            val config = SbConfig.build(server, include, exclude)
+            val config = SbConfig.build(
+                server,
+                include,
+                exclude,
+                routingMode = store.routingMode,
+                ruleSetDir = ensureRuleSets(context, store.routingMode),
+            )
             File(context.filesDir, "config.json").writeText(config)
             io.nekohasekai.libbox.Libbox.checkConfig(config)
             CrashLogger.breadcrumb(
                 "config written: ${config.length} bytes, mode=${store.perAppMode}" +
-                    " include=${include.size} exclude=${exclude.size}",
+                    " include=${include.size} exclude=${exclude.size} route=${store.routingMode}",
             )
             null
         } catch (t: Throwable) {
@@ -50,4 +56,30 @@ object ConfigWriter {
             (t.message ?: t.javaClass.simpleName).take(300)
         }
     }
+
+    /**
+     * Copies the bundled .srs rule-sets (sing-geosite / sing-geoip, "rule-set"
+     * branches) from assets into filesDir/rule-sets. Files are refreshed on
+     * every write so an app update ships updated lists; ~60 KB total, done
+     * before the config is validated (sing-box loads local rule-sets at
+     * start, a missing file is fatal). Returns the directory that must be
+     * referenced by the config, or null when smart routing is off.
+     */
+    private fun ensureRuleSets(context: Context, mode: String): String? {
+        if (mode != Store.ROUTE_RU) return null
+        val dir = File(context.filesDir, "rule-sets")
+        dir.mkdirs()
+        for (name in RULE_SET_FILES) {
+            context.assets.open("rulesets/$name").use { input ->
+                File(dir, name).writeBytes(input.readBytes())
+            }
+        }
+        return dir.absolutePath
+    }
+
+    private val RULE_SET_FILES = listOf(
+        "category-ru.srs",
+        "category-gov-ru.srs",
+        "geoip-ru.srs",
+    )
 }

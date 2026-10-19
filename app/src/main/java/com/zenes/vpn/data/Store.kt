@@ -249,6 +249,13 @@ class Store(context: Context) {
         get() = prefs.getLong(KEY_LAST_UPDATE_CHECK, 0)
         set(value) = prefs.edit().putLong(KEY_LAST_UPDATE_CHECK, value).apply()
 
+    // ---------- traffic routing (RU smart split) ----------
+
+    /** ROUTE_ALL / ROUTE_RU */
+    var routingMode: String
+        get() = prefs.getString(KEY_ROUTE_MODE, ROUTE_ALL) ?: ROUTE_ALL
+        set(value) = prefs.edit().putString(KEY_ROUTE_MODE, value).apply()
+
     // ---------- per-app routing ----------
 
     /** PER_APP_ALL / PER_APP_INCLUDE / PER_APP_EXCLUDE */
@@ -280,6 +287,10 @@ class Store(context: Context) {
         private const val KEY_PER_APP_MODE = "per_app_mode"
         private const val KEY_PER_APP_INCLUDE = "per_app_include"
         private const val KEY_PER_APP_EXCLUDE = "per_app_exclude"
+
+        const val ROUTE_ALL = "all"
+        const val ROUTE_RU = "ru"
+        private const val KEY_ROUTE_MODE = "route_mode"
 
         const val SUB_AUTO_OFF = "off"
         const val SUB_AUTO_LAUNCH = "launch"

@@ -148,6 +148,36 @@
     <string name="sub_info_expired">Subscription expired</string>
     <string name="home_subscription">Subscription</string>
 
+    <!-- Traffic routing -->
+    <string name="route_title">Traffic routing</string>
+    <string name="route_summary_all">All traffic through the VPN</string>
+    <string name="route_summary_ru">Smart: Russian sites go direct</string>
+    <string name="route_mode_all">All through VPN</string>
+    <string name="route_mode_all_desc">Everything goes through the VPN, as before.</string>
+    <string name="route_mode_ru">Smart (Russian sites direct)</string>
+    <string name="route_mode_ru_desc">Russian sites and services (banks, Gosuslugi, Yandex, VK) go directly; everything else goes through the VPN. Blocked resources open as usual.</string>
+
+    <!-- Backup -->
+    <string name="section_backup">Backup</string>
+    <string name="backup_export">Export to file</string>
+    <string name="backup_export_sub">Save servers, subscriptions and settings as a JSON file</string>
+    <string name="backup_qr">Show QR code</string>
+    <string name="backup_qr_sub">Move data to another phone — scan the code there</string>
+    <string name="backup_import">Import from file</string>
+    <string name="backup_import_sub">Restore from a previously saved backup</string>
+    <string name="backup_scan">Scan QR code</string>
+    <string name="backup_scan_sub">Point the camera at a code from another device</string>
+    <string name="backup_saved">Backup saved</string>
+    <string name="backup_invalid">Not a ZenesVPN backup</string>
+    <string name="backup_qr_too_big">Too much data for a QR code — use file export</string>
+    <string name="backup_qr_hint">On the other phone: ZenesVPN → Settings → Backup → Scan QR code</string>
+    <string name="backup_confirm_title">Restore backup?</string>
+    <string name="backup_action_restore">Restore</string>
+    <string name="backup_confirm_text">Servers: %1$d, subscriptions: %2$d.\nCurrent servers, subscriptions and settings will be replaced.</string>
+    <string name="backup_restored">Restored: %1$d server(s), %2$d subscription(s)</string>
+    <string name="backup_qr_saved">QR code saved</string>
+    <string name="backup_file_name">zenes-backup.json</string>
+
     <!-- Error log -->
     <string name="crash_expand">Expand</string>
     <string name="crash_collapse">Collapse</string>
