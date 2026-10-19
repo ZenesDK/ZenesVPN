@@ -1,8 +1,13 @@
 package com.zenes.vpn.ui
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -55,6 +60,7 @@ fun UpdateDialog() {
         is Updater.State.Available -> {
             var notesExpanded by remember { mutableStateOf(false) }
             val notes = remember(s.version) { Updater.cleanReleaseNotes(s.notes) }
+            val notesScroll = rememberScrollState()
             val chevronRotation by animateFloatAsState(
                 targetValue = if (notesExpanded) 180f else 0f,
                 label = "whatsnew-chevron",
@@ -63,7 +69,7 @@ fun UpdateDialog() {
                 onDismissRequest = { Updater.dismiss() },
                 title = { Text(stringResource(R.string.update_available_title)) },
                 text = {
-                    Column(Modifier.animateContentSize()) {
+                    Column {
                         Text(
                             stringResource(
                                 R.string.update_available_text,
@@ -95,7 +101,18 @@ fun UpdateDialog() {
                                         .rotate(chevronRotation),
                                 )
                             }
-                            AnimatedVisibility(visible = notesExpanded) {
+                            // Single size animation source (expand/shrink here) —
+                            // no animateContentSize on the parent: two competing
+                            // size animations are what made this block stutter.
+                            AnimatedVisibility(
+                                visible = notesExpanded,
+                                enter = fadeIn(tween(150)) + expandVertically(
+                                    animationSpec = tween(220, easing = FastOutSlowInEasing),
+                                ),
+                                exit = fadeOut(tween(120)) + shrinkVertically(
+                                    animationSpec = tween(200, easing = FastOutSlowInEasing),
+                                ),
+                            ) {
                                 Text(
                                     notes,
                                     style = MaterialTheme.typography.bodySmall,
@@ -103,7 +120,7 @@ fun UpdateDialog() {
                                     modifier = Modifier
                                         .padding(top = 6.dp)
                                         .heightIn(max = 240.dp)
-                                        .verticalScroll(rememberScrollState()),
+                                        .verticalScroll(notesScroll),
                                 )
                             }
                         }

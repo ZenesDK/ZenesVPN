@@ -2,6 +2,9 @@ package com.zenes.vpn.core
 
 import android.content.Context
 import android.content.Intent
+import android.net.ConnectivityManager
+import android.net.Network
+import android.net.NetworkCapabilities
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
@@ -34,13 +37,21 @@ import java.net.URL
  * non-device-owner) app — Android always shows the system confirmation dialog
  * for a signature-matched update. "Download & install" therefore means:
  * the app downloads everything and only the final OS confirm button remains.
+ *
+ * Networking: while the VPN is up, plain sockets of THIS app are routed
+ * through the tunnel (through the user's proxy) — small API calls may
+ * survive, but the ~60 MB APK download over a flaky proxy stalls. All
+ * updater requests therefore run on the underlying physical network
+ * (bound via [Network], the app-level equivalent of VpnService.protect),
+ * with an automatic fallback to the default routing (through the tunnel)
+ * in case GitHub is only reachable via the proxy on a given network.
  */
 object Updater {
 
     private const val LATEST_URL =
         "https://api.github.com/repos/ZenesDK/ZenesVPN/releases/latest"
-    private const val CONNECT_TIMEOUT = 10_000
-    private const val READ_TIMEOUT = 15_000
+    private const val CONNECT_TIMEOUT = 15_000
+    private const val READ_TIMEOUT = 20_000
     /** Auto-check (app start) is throttled to once per 4 hours — polite to api.github.com. */
     private const val AUTO_CHECK_INTERVAL_MS = 4 * 60 * 60 * 1000L
 
@@ -83,7 +94,7 @@ object Updater {
         scope.launch {
             _state.value = State.Checking
             try {
-                val info = fetchLatest()
+                val info = fetchLatest(appContext)
                 _state.value = if (info == null || !isNewer(BuildConfig.VERSION_NAME, info.version)) {
                     State.UpToDate
                 } else {
@@ -106,7 +117,7 @@ object Updater {
                 val dir = File(appContext.cacheDir, "updates").apply { mkdirs() }
                 val out = File(dir, "zenes-update-${cur.version}.apk")
                 out.delete()
-                download(cur.url, out)
+                download(appContext, cur.url, out)
                 if (out.length() < 1_000_000L) throw Exception("incomplete download")
                 CrashLogger.breadcrumb("update downloaded: ${out.name} (${out.length()} B)")
                 _state.value = State.Ready(cur.version, out)
@@ -168,8 +179,60 @@ object Updater {
 
     // ------------------------------------------------------------ internals
 
-    private fun fetchLatest(): State.Available? {
-        val conn = URL(LATEST_URL).openConnection() as HttpURLConnection
+    /**
+     * Best underlying (non-VPN) network for bypassing our own tunnel, or null
+     * if there is none (VPN off / no internet-capable physical network).
+     * Sockets bound to this network skip the tun entirely — the same effect
+     * VpnService.protect() gives the engine's own outbound connections.
+     */
+    private fun bypassNetwork(context: Context): Network? {
+        val cm = context.getSystemService(ConnectivityManager::class.java) ?: return null
+        var candidate: Network? = null
+        for (net in cm.allNetworks) {
+            val caps = cm.getNetworkCapabilities(net) ?: continue
+            if (caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN)) continue
+            if (!caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)) continue
+            if (caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)) return net
+            if (candidate == null) candidate = net
+        }
+        return candidate
+    }
+
+    /**
+     * Runs [block] first on the physical network (direct, bypassing our
+     * tunnel) and, if that throws, again on the default routing — which is
+     * through the tunnel while the VPN is up. Covers both worlds: a flaky
+     * proxy does not break big downloads, and networks where GitHub itself
+     * is blocked still go via the user's proxy.
+     */
+    private inline fun <T> withNetworkFallback(
+        context: Context,
+        tag: String,
+        block: (Network?) -> T,
+    ): T {
+        val bypass = bypassNetwork(context)
+        if (bypass == null) {
+            CrashLogger.breadcrumb("update $tag: no bypass network, default routing")
+            return block(null)
+        }
+        try {
+            return block(bypass)
+        } catch (t: Throwable) {
+            CrashLogger.breadcrumb("update $tag via direct failed: ${t.message}")
+            return block(null)
+        }
+    }
+
+    /** Opens the URL on the given network (null = default routing); DNS resolves via the same network. */
+    private fun open(url: String, network: Network?): HttpURLConnection =
+        if (network != null) network.openConnection(URL(url)) as HttpURLConnection
+        else URL(url).openConnection() as HttpURLConnection
+
+    private fun fetchLatest(context: Context): State.Available? =
+        withNetworkFallback(context, "check") { network -> fetchVia(network) }
+
+    private fun fetchVia(network: Network?): State.Available? {
+        val conn = open(LATEST_URL, network)
         try {
             conn.connectTimeout = CONNECT_TIMEOUT
             conn.readTimeout = READ_TIMEOUT
@@ -199,8 +262,11 @@ object Updater {
         }
     }
 
-    private fun download(url: String, out: File) {
-        val conn = URL(url).openConnection() as HttpURLConnection
+    private fun download(context: Context, url: String, out: File) =
+        withNetworkFallback(context, "download") { network -> downloadVia(url, out, network) }
+
+    private fun downloadVia(url: String, out: File, network: Network?) {
+        val conn = open(url, network)
         try {
             conn.connectTimeout = CONNECT_TIMEOUT
             conn.readTimeout = 30_000
