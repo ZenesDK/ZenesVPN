@@ -48,6 +48,9 @@ object ConfigWriter {
             File(context.filesDir, "config.json").writeText(config)
             io.nekohasekai.libbox.Libbox.checkConfig(config)
             CrashLogger.breadcrumb(
+                "server: ${server.name.take(60)} (${server.proto}) ${server.host}:${server.port}",
+            )
+            CrashLogger.breadcrumb(
                 "config written: ${config.length} bytes, mode=${store.perAppMode}" +
                     " include=${include.size} exclude=${exclude.size} route=${store.routingMode}" +
                     " ads=${store.blockAds}",

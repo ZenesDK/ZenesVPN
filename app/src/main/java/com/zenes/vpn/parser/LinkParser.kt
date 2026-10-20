@@ -2,6 +2,7 @@ package com.zenes.vpn.parser
 
 import android.net.Uri
 import android.util.Base64
+import com.zenes.vpn.bg.CrashLogger
 import com.zenes.vpn.data.ServerProfile
 import org.json.JSONArray
 import org.json.JSONObject
@@ -517,7 +518,32 @@ object LinkParser {
                 params["serviceName"]?.let { if (it.isNotEmpty()) t.put("service_name", it) }
                 t
             }
-            else -> null
+            "httpupgrade" -> {
+                // Xray-style HTTP Upgrade (also common on 2025+ subscription
+                // links). The engine ships v2rayhttpupgrade, so build it
+                // explicitly — dropping the transport here silently rewrites
+                // the whole handshake and produces a "CONNECTED" tunnel that
+                // cannot pass a single byte.
+                val t = JSONObject().put("type", "httpupgrade")
+                val path = params["path"]
+                if (path?.isNotEmpty() == true) t.put("path", path)
+                val hostHeader = params["host"]
+                if (hostHeader?.isNotEmpty() == true) t.put("host", hostHeader)
+                t
+            }
+            else -> {
+                // tcp/none are genuine no-transport cases; anything else means
+                // the link carries a transport we cannot express (xhttp,
+                // splithttp, kcp...) — the outbound WILL be wrong. Say it in
+                // the diagnostics log instead of dying silently.
+                if (type.isNotEmpty() && type != "tcp" && type != "none") {
+                    CrashLogger.breadcrumb(
+                        "parser: transport '$type' is not supported by this engine — " +
+                            "connection may fail; engine supports ws/http/grpc/httpupgrade",
+                    )
+                }
+                null
+            }
         }
     }
 }

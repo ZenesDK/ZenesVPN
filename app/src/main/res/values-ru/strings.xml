@@ -91,6 +91,7 @@
     <string name="notif_protected_stats">Защищено · ↓ %1$s · ↑ %2$s</string>
     <string name="notif_speed_line">↓ %1$s · ↑ %2$s</string>
     <string name="notif_session_traffic">За сессию: ↓ %1$s · ↑ %2$s</string>
+    <string name="notif_tunnel_dead">Подключено, но трафик через туннель не идёт — смените сервер</string>
     <string name="err_reconnect_failed">Не удалось восстановить подключение после нескольких попыток</string>
 
     <!-- Обновления -->

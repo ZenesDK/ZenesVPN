@@ -37,16 +37,52 @@ object BoxClient : CommandClientHandler {
     @Volatile
     private var statsFlowLogged = false
 
+    // ---- engine log gate (writeLogs) ----
+    // libbox level ints (sing-box log package): 0 FATAL, 1 PANIC, 2 ERROR,
+    // 3 WARN, 4 INFO, 5 DEBUG, 6 TRACE. Errors/warnings are what explains a
+    // dead tunnel, so they get a deep budget; INFO is throttled hard (every
+    // accepted connection logs one INFO line — a file download alone would
+    // otherwise flood crash.log).
+    private const val LOG_WINDOW_MS = 10_000L
+    private const val LOG_BUDGET_BAD = 150
+    private const val LOG_BUDGET_INFO = 30
+    private val logGate = Any()
+    private var logWindowStart = 0L
+    private var logBudgetBad = LOG_BUDGET_BAD
+    private var logBudgetInfo = LOG_BUDGET_INFO
+
+    private fun gateLog(level: Int): Boolean {
+        synchronized(logGate) {
+            val now = System.currentTimeMillis()
+            if (now - logWindowStart > LOG_WINDOW_MS) {
+                logWindowStart = now
+                logBudgetBad = LOG_BUDGET_BAD
+                logBudgetInfo = LOG_BUDGET_INFO
+            }
+            return if (level <= 3) {
+                if (logBudgetBad > 0) { logBudgetBad--; true } else false
+            } else {
+                if (logBudgetInfo > 0) { logBudgetInfo--; true } else false
+            }
+        }
+    }
+
     fun ensureStarted() {
         synchronized(lock) {
             if (client != null) return
             val options = CommandClientOptions()
             // Interval is a Go time.Duration (nanoseconds): 1 second.
             options.statusInterval = 1_000_000_000L
+            // CommandLog: stream the engine's own log (dial errors, TLS/Reality
+            // handshake failures, DNS failures...) into the diagnostics log.
+            // Without it a broken outbound looks like a healthy "CONNECTED" —
+            // the engine knows why traffic is dead, we just never listened.
+            options.addCommand(Libbox.CommandLog)
             options.addCommand(Libbox.CommandStatus)
             val c = Libbox.newCommandClient(this, options)
             client = c
             statsFlowLogged = false
+            synchronized(logGate) { logWindowStart = 0L; logBudgetBad = LOG_BUDGET_BAD; logBudgetInfo = LOG_BUDGET_INFO }
             worker = thread(name = "zenes-box-client") {
                 while (true) {
                     try {
@@ -84,6 +120,9 @@ object BoxClient : CommandClientHandler {
         }
     }
 
+    /** True once any session status carried nonzero traffic (tunnel proven alive). */
+    fun statsEverFlowed(): Boolean = statsFlowLogged
+
     fun stop() {
         synchronized(lock) {
             worker?.interrupt()
@@ -103,6 +142,7 @@ object BoxClient : CommandClientHandler {
     override fun writeStatus(message: StatusMessage) {
         if (!statsFlowLogged && (message.uplinkTotal > 0 || message.downlinkTotal > 0)) {
             statsFlowLogged = true
+            VpnStateBus.tunnelUnreachable.value = false // real traffic beats the self-check verdict
             CrashLogger.breadcrumb(
                 "stats flowing: down=" + Libbox.formatBytes(message.downlinkTotal) +
                     " up=" + Libbox.formatBytes(message.uplinkTotal),
@@ -120,7 +160,19 @@ object BoxClient : CommandClientHandler {
     override fun disconnected(message: String) {}
     override fun setDefaultLogLevel(level: Int) {}
     override fun clearLogs() {}
-    override fun writeLogs(messageList: LogIterator) {}
+
+    override fun writeLogs(messageList: LogIterator) {
+        try {
+            while (messageList.hasNext()) {
+                val entry = messageList.next()
+                val message = entry.message ?: continue
+                if (!gateLog(entry.level)) continue
+                CrashLogger.breadcrumb("box: " + message.take(220))
+            }
+        } catch (_: Throwable) {
+            // log streaming must never take the stats stream down
+        }
+    }
     override fun writeGroups(message: OutboundGroupIterator) {}
     override fun writeOutbounds(message: OutboundGroupItemIterator) {}
     override fun initializeClashMode(modeList: StringIterator, currentMode: String) {}

@@ -22,6 +22,14 @@ object VpnStateBus {
     val uplinkTotal = MutableStateFlow(0L)
     val downlinkTotal = MutableStateFlow(0L)
 
+    /**
+     * The engine reports CONNECTED, but the post-connect self-check could not
+     * push a request through the tunnel (dead server, broken handshake, DNS
+     * blackhole...). Surfaced in the notification so "green but dead" sessions
+     * stop looking healthy. Cleared when real traffic flows or on reconnect.
+     */
+    val tunnelUnreachable = MutableStateFlow(false)
+
     fun post(state: State, errorMessage: String? = null) {
         _state.value = state
         _error.value = if (state == State.ERROR) errorMessage else null
@@ -30,6 +38,11 @@ object VpnStateBus {
             downlink.value = 0
             uplinkTotal.value = 0
             downlinkTotal.value = 0
+        }
+        if (state == State.CONNECTING || state == State.DISCONNECTED ||
+            state == State.STOPPING
+        ) {
+            tunnelUnreachable.value = false
         }
     }
 }

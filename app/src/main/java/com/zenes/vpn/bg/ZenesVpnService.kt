@@ -35,8 +35,10 @@ import io.nekohasekai.libbox.RoutePrefixIterator
 import io.nekohasekai.libbox.StringIterator
 import io.nekohasekai.libbox.TunOptions
 import io.nekohasekai.libbox.NetworkInterface as LibboxNetworkInterface
+import java.net.HttpURLConnection
 import java.net.InetAddress
 import java.net.NetworkInterface as JavaNetworkInterface
+import java.net.URL
 
 class ZenesVpnService : VpnService(), PlatformInterface, CommandServerHandler {
 
@@ -93,6 +95,14 @@ class ZenesVpnService : VpnService(), PlatformInterface, CommandServerHandler {
     @Volatile private var lastStartAttemptMs = 0L
     private var connectedSinceMs = 0L
     private var retryRunnable: Runnable? = null
+
+    /**
+     * Whether the app's own traffic actually rides the tunnel for the current
+     * session (include list contains us, exclude list does not, or no per-app
+     * mode). Computed in openTun(); a bypassing app would make the self-check
+     * probe the physical network and report a verdict about nothing.
+     */
+    @Volatile private var selfCheckInTunnel = true
 
     // ------------------------------------------------------------ lifecycle
 
@@ -208,6 +218,7 @@ class ZenesVpnService : VpnService(), PlatformInterface, CommandServerHandler {
                 connectedSinceMs = System.currentTimeMillis()
                 startStatsTicker()
                 BoxClient.ensureStarted()
+                startTunnelSelfCheck()
             } catch (t: Throwable) {
                 if (shouldStop) return@Thread
                 stopStatsTicker()
@@ -384,19 +395,32 @@ class ZenesVpnService : VpnService(), PlatformInterface, CommandServerHandler {
 
         when (state) {
             VpnStateBus.State.CONNECTED -> {
-                // Live speeds + session totals (updated every second by statsTicker).
-                val up = Libbox.formatBytes(VpnStateBus.uplink.value) + "/s"
-                val down = Libbox.formatBytes(VpnStateBus.downlink.value) + "/s"
-                val upTotal = Libbox.formatBytes(VpnStateBus.uplinkTotal.value)
-                val downTotal = Libbox.formatBytes(VpnStateBus.downlinkTotal.value)
-                builder.setContentText(getString(R.string.notif_protected_stats, down, up))
-                builder.setStyle(
-                    NotificationCompat.BigTextStyle().bigText(
-                        getString(R.string.notif_connected) + "\n" +
-                            getString(R.string.notif_speed_line, down, up) + "\n" +
-                            getString(R.string.notif_session_traffic, downTotal, upTotal),
-                    ),
-                )
+                if (VpnStateBus.tunnelUnreachable.value) {
+                    // Engine says CONNECTED but the self-check could not get a
+                    // byte through (and no user traffic did either). Say so —
+                    // a green notification that cannot browse is a lie.
+                    builder.setContentText(getString(R.string.notif_tunnel_dead))
+                    builder.setStyle(
+                        NotificationCompat.BigTextStyle().bigText(
+                            getString(R.string.notif_connected) + "\n" +
+                                getString(R.string.notif_tunnel_dead),
+                        ),
+                    )
+                } else {
+                    // Live speeds + session totals (updated every second by statsTicker).
+                    val up = Libbox.formatBytes(VpnStateBus.uplink.value) + "/s"
+                    val down = Libbox.formatBytes(VpnStateBus.downlink.value) + "/s"
+                    val upTotal = Libbox.formatBytes(VpnStateBus.uplinkTotal.value)
+                    val downTotal = Libbox.formatBytes(VpnStateBus.downlinkTotal.value)
+                    builder.setContentText(getString(R.string.notif_protected_stats, down, up))
+                    builder.setStyle(
+                        NotificationCompat.BigTextStyle().bigText(
+                            getString(R.string.notif_connected) + "\n" +
+                                getString(R.string.notif_speed_line, down, up) + "\n" +
+                                getString(R.string.notif_session_traffic, downTotal, upTotal),
+                        ),
+                    )
+                }
             }
             VpnStateBus.State.CONNECTING, VpnStateBus.State.STOPPING ->
                 if (state == VpnStateBus.State.CONNECTING && retryPending && retryAttempt > 0) {
@@ -619,6 +643,13 @@ class ZenesVpnService : VpnService(), PlatformInterface, CommandServerHandler {
                 }
             }
         }
+        // Self-check relevance: our own probe only measures the tunnel when the
+        // VPN rules actually route this app's traffic into it.
+        selfCheckInTunnel = when {
+            includeApplied > 0 -> includePkgs.contains(packageName)
+            excludeApplied > 0 -> !excludePkgs.contains(packageName)
+            else -> true
+        }
         CrashLogger.breadcrumb(
             "openTun per-app applied: include=$includeApplied/${includePkgs.size}" +
                 (if (excludePkgs.isNotEmpty()) " deny=$excludeApplied/${excludePkgs.size}" else ""),
@@ -802,6 +833,71 @@ class ZenesVpnService : VpnService(), PlatformInterface, CommandServerHandler {
 
     override fun createBridge(options: io.nekohasekai.libbox.BridgeOptions?): io.nekohasekai.libbox.BridgeSession {
         throw UnsupportedOperationException("bridge is not supported")
+    }
+
+    // ------------------------------------------------------------ tunnel self-check
+
+    /**
+     * The engine reports CONNECTED as soon as box starts — even if the proxy
+     * server never answers (rotated subscription, dead node, broken handshake,
+     * blocked IP). Push one real request through the tunnel from the app's own
+     * UID (it is always on the include list, and full-VPN captures it anyway)
+     * and record the verdict:
+     *   - OK        -> breadcrumb only, business as usual;
+     *   - FAILED    -> breadcrumb with the reason + "no traffic" notification
+     *                  text, unless real user traffic has already proven the
+     *                  tunnel alive (BoxClient.statsEverFlowed).
+     * HTTP 204 probe: plain HTTP exercises DNS hijack + proxy TCP without
+     * paying for a TLS handshake, and 204 says "bytes crossed the tunnel".
+     */
+    private fun startTunnelSelfCheck() {
+        Thread({
+            try {
+                Thread.sleep(8_000L)
+            } catch (_: InterruptedException) {
+                return@Thread
+            }
+            if (!wantsConnected || shouldStop || stopInProgress) return@Thread
+            if (VpnStateBus.state.value != VpnStateBus.State.CONNECTED) return@Thread
+            if (!selfCheckInTunnel) {
+                CrashLogger.breadcrumb("tunnel self-check: skipped (app bypasses the tunnel in per-app mode)")
+                return@Thread
+            }
+            val started = System.currentTimeMillis()
+            try {
+                val conn = URL("http://connectivitycheck.gstatic.com/generate_204")
+                    .openConnection() as HttpURLConnection
+                conn.connectTimeout = 8_000
+                conn.readTimeout = 8_000
+                conn.instanceFollowRedirects = false
+                conn.setRequestProperty("User-Agent", "ZenesVPN self-check")
+                val code = conn.responseCode
+                try {
+                    conn.errorStream?.close()
+                } catch (_: Throwable) {
+                }
+                val ms = System.currentTimeMillis() - started
+                if (code == 204) {
+                    CrashLogger.breadcrumb("tunnel self-check: OK (204 in ${ms}ms)")
+                } else {
+                    CrashLogger.breadcrumb("tunnel self-check: unexpected HTTP $code in ${ms}ms")
+                    if (!BoxClient.statsEverFlowed()) {
+                        VpnStateBus.tunnelUnreachable.value = true
+                        updateNotification()
+                    }
+                }
+            } catch (t: Throwable) {
+                if (!wantsConnected || VpnStateBus.state.value != VpnStateBus.State.CONNECTED) {
+                    return@Thread
+                }
+                val reason = t.message?.take(160) ?: t.javaClass.simpleName
+                CrashLogger.breadcrumb("tunnel self-check: FAILED (${t.javaClass.simpleName}: $reason)")
+                if (!BoxClient.statsEverFlowed()) {
+                    VpnStateBus.tunnelUnreachable.value = true
+                    updateNotification()
+                }
+            }
+        }, "zenes-selfcheck").start()
     }
 
     // ------------------------------------------------------------ auto-reconnect watchdog
