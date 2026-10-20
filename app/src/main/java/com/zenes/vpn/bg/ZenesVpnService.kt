@@ -1027,8 +1027,13 @@ class ZenesVpnService : VpnService(), PlatformInterface, CommandServerHandler {
      *   - FAILED    -> breadcrumb with the reason + "no traffic" notification
      *                  text, unless real user traffic has already proven the
      *                  tunnel alive (BoxClient.statsEverFlowed).
-     * HTTP 204 probe: plain HTTP exercises DNS hijack + proxy TCP without
-     * paying for a TLS handshake, and 204 says "bytes crossed the tunnel".
+     * HTTPS 204 probe (v1.14.2): the previous cleartext HTTP probe never ran —
+     * Android's default network security policy threw "Cleartext HTTP traffic
+     * not permitted" before a single packet left the app, so every healthy
+     * tunnel was "FAILED" by policy and every verdict was noise. HTTPS also
+     * exercises DNS hijack + proxy TCP + TLS end-to-end. Any HTTP response
+     * (204/3xx/captive page) still proves bytes crossed the tunnel; only a
+     * transport failure on every probe is a dead-tunnel verdict.
      */
     private fun startTunnelSelfCheck() {
         Thread({
@@ -1044,38 +1049,50 @@ class ZenesVpnService : VpnService(), PlatformInterface, CommandServerHandler {
                 return@Thread
             }
             val started = System.currentTimeMillis()
-            try {
-                val conn = URL("http://connectivitycheck.gstatic.com/generate_204")
-                    .openConnection() as HttpURLConnection
-                conn.connectTimeout = 8_000
-                conn.readTimeout = 8_000
-                conn.instanceFollowRedirects = false
-                conn.setRequestProperty("User-Agent", "ZenesVPN self-check")
-                val code = conn.responseCode
-                try {
-                    conn.errorStream?.close()
-                } catch (_: Throwable) {
-                }
-                val ms = System.currentTimeMillis() - started
-                if (code == 204) {
-                    CrashLogger.breadcrumb("tunnel self-check: OK (204 in ${ms}ms)")
-                } else {
-                    CrashLogger.breadcrumb("tunnel self-check: unexpected HTTP $code in ${ms}ms")
-                    if (!BoxClient.statsEverFlowed()) {
-                        VpnStateBus.tunnelUnreachable.value = true
-                        updateNotification()
-                    }
-                }
-            } catch (t: Throwable) {
+            // Chromium's secure captive-portal checks — both serve a bare 204.
+            val probes = listOf(
+                "https://connectivitycheck.gstatic.com/generate_204",
+                "https://www.google.com/generate_204",
+            )
+            var lastReason: String? = null
+            for (probe in probes) {
                 if (!wantsConnected || VpnStateBus.state.value != VpnStateBus.State.CONNECTED) {
                     return@Thread
                 }
-                val reason = t.message?.take(160) ?: t.javaClass.simpleName
-                CrashLogger.breadcrumb("tunnel self-check: FAILED (${t.javaClass.simpleName}: $reason)")
-                if (!BoxClient.statsEverFlowed()) {
-                    VpnStateBus.tunnelUnreachable.value = true
-                    updateNotification()
+                try {
+                    val conn = URL(probe).openConnection() as HttpURLConnection
+                    conn.connectTimeout = 8_000
+                    conn.readTimeout = 8_000
+                    conn.instanceFollowRedirects = false
+                    conn.setRequestProperty("User-Agent", "ZenesVPN self-check")
+                    val code = conn.responseCode
+                    try {
+                        conn.errorStream?.close()
+                    } catch (_: Throwable) {
+                    }
+                    val ms = System.currentTimeMillis() - started
+                    if (code == 204) {
+                        CrashLogger.breadcrumb("tunnel self-check: OK ($probe 204 in ${ms}ms)")
+                    } else {
+                        // An unexpected page still proves the tunnel passes traffic.
+                        CrashLogger.breadcrumb(
+                            "tunnel self-check: HTTP $code from $probe in ${ms}ms (traffic flows)",
+                        )
+                    }
+                    return@Thread
+                } catch (t: Throwable) {
+                    lastReason = "${t.javaClass.simpleName}: ${t.message?.take(160)}"
+                    CrashLogger.breadcrumb("tunnel self-check: $probe failed ($lastReason)")
                 }
+            }
+            if (!wantsConnected || VpnStateBus.state.value != VpnStateBus.State.CONNECTED) {
+                return@Thread
+            }
+            val reason = lastReason ?: "unknown"
+            CrashLogger.breadcrumb("tunnel self-check: FAILED (all probes — $reason)")
+            if (!BoxClient.statsEverFlowed()) {
+                VpnStateBus.tunnelUnreachable.value = true
+                updateNotification()
             }
         }, "zenes-selfcheck").start()
     }

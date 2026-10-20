@@ -26,6 +26,9 @@ import kotlinx.coroutines.CancellationException
  * order of attempts from the live VPN state:
  *
  *   tunnel up   → preferred path first, the other one as fallback
+ *   tunnel up + self-check verdict "unreachable" → direct first anyway
+ *         (the tunnel is known-dead: a tunnel-first attempt would burn a
+ *         full timeout on every request before the direct fallback)
  *   tunnel down → a single direct attempt (a second one would be identical)
  *
  * "Physical bypass" binds sockets to an underlying non-VPN network — the
@@ -69,7 +72,8 @@ object NetPath {
      * calls: check, subscription refresh — on censored networks direct is
      * blocked and a direct-first order would always burn a full timeout);
      * false = direct first, tunnel fallback (big downloads: keep them off
-     * a flaky proxy when possible).
+     * a flaky proxy when possible). The tunnel-first order is downgraded to
+     * direct-first while the tunnel self-check verdict says "unreachable".
      */
     inline fun <T> withSmartPath(
         context: Context,
@@ -87,7 +91,15 @@ object NetPath {
             CrashLogger.breadcrumb("$tag: tunnel up, no bypass network — default routing")
             return block(null)
         }
-        val order = if (tunnelFirst) {
+        // A green-but-dead tunnel (self-check could not push a byte through,
+        // and no user traffic has disproved it yet) must not stall aux
+        // requests: flip to direct-first instead of burning a timeout on a
+        // path the self-check already declared unreachable.
+        val tunnelSuspect = VpnStateBus.tunnelUnreachable.value
+        if (tunnelFirst && tunnelSuspect) {
+            CrashLogger.breadcrumb("$tag: tunnel verdict is unreachable — direct first")
+        }
+        val order = if (tunnelFirst && !tunnelSuspect) {
             listOf<Network?>(null, bypass)
         } else {
             listOf<Network?>(bypass, null)
@@ -113,9 +125,10 @@ object NetPath {
      * Measures DIRECT reachability first (bound to the physical network —
      * that is what decides whether a server is connectable at all, and it
      * keeps per-server numbers meaningful while the tunnel is up). When the
-     * direct path fails and the tunnel is up, falls back through the tunnel
-     * so the user still sees liveness on censored networks instead of a
-     * wall of dashes.
+     * direct path fails and the tunnel is up and healthy, falls back through
+     * the tunnel so the user still sees liveness on censored networks instead
+     * of a wall of dashes. An "unreachable" self-check verdict skips the
+     * tunnel fallback — a dead tunnel only adds a timeout, not a number.
      */
     fun tcpConnectMs(context: Context?, host: String, port: Int, timeoutMs: Int): Int? {
         if (context != null) {
@@ -123,7 +136,7 @@ object NetPath {
             if (net != null) {
                 val ms = connectMs(net, host, port, timeoutMs)
                 if (ms != null) return ms
-                if (!tunnelUp()) return null
+                if (!tunnelUp() || VpnStateBus.tunnelUnreachable.value) return null
             }
         }
         return connectMs(null, host, port, timeoutMs)
