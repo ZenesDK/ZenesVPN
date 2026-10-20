@@ -28,11 +28,14 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.FolderOpen
+import androidx.compose.material.icons.filled.OpenInNew
 import androidx.compose.material.icons.filled.QrCode2
 import androidx.compose.material.icons.filled.QrCodeScanner
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Route
 import androidx.compose.material.icons.filled.SaveAlt
 import androidx.compose.material.icons.filled.SystemUpdateAlt
@@ -846,6 +849,31 @@ fun SettingsScreen(onOpenPerApps: () -> Unit, onOpenStats: () -> Unit) {
                 )
             }
         }
+
+        // ---------------- github ----------------
+        Spacer(Modifier.height(8.dp))
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(24.dp))
+                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
+        ) {
+            Column {
+                LinkRow(
+                    icon = Icons.Default.Code,
+                    title = stringResource(R.string.github_repo_title),
+                    subtitle = stringResource(R.string.github_repo_sub),
+                    url = GITHUB_REPO_URL,
+                )
+                HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
+                LinkRow(
+                    icon = Icons.Default.Person,
+                    title = stringResource(R.string.github_profile_title),
+                    subtitle = stringResource(R.string.github_profile_sub),
+                    url = GITHUB_PROFILE_URL,
+                )
+            }
+        }
         Spacer(Modifier.height(24.dp))
     }
 }
@@ -971,6 +999,59 @@ private fun requestBatteryExemption(context: android.content.Context) {
         } catch (t: Throwable) {
             toast(context, t.message ?: "?")
         }
+    }
+}
+
+private const val GITHUB_REPO_URL = "https://github.com/ZenesDK/ZenesVPN"
+private const val GITHUB_PROFILE_URL = "https://github.com/ZenesDK"
+
+/**
+ * A settings row that opens an external link in the browser. Failures are
+ * honest: some ROMs ship without a browser, so fall back to a toast instead
+ * of silently doing nothing.
+ */
+@Composable
+private fun LinkRow(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    title: String,
+    subtitle: String,
+    url: String,
+) {
+    val context = LocalContext.current
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable {
+                try {
+                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+                } catch (_: Throwable) {
+                    toast(context, context.getString(R.string.github_open_error))
+                }
+            }
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Text(
+                title,
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Text(
+                subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Spacer(Modifier.width(8.dp))
+        Icon(
+            Icons.Default.OpenInNew,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(18.dp),
+        )
     }
 }
 
