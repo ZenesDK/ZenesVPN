@@ -117,6 +117,13 @@
     <string name="update_blocked_hint">GitHub is unreachable directly from your network. Connect the VPN and retry — the check will go through the tunnel.</string>
     <string name="ping_blocked_hint">Servers are unreachable directly — the network may be blocking them. Connect the VPN and ping again to check through the tunnel.</string>
 
+    <!-- GitHub -->
+    <string name="github_repo_title">GitHub repository</string>
+    <string name="github_repo_sub">Source code and issues · github.com/ZenesDK/ZenesVPN</string>
+    <string name="github_profile_title">Author on GitHub</string>
+    <string name="github_profile_sub">github.com/ZenesDK</string>
+    <string name="github_open_error">Could not open the link — no browser found</string>
+
     <!-- QR -->
     <string name="qr_prompt">Place a QR code with the config link inside the frame</string>
     <string name="qr_torch">Flashlight</string>

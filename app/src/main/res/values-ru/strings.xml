@@ -117,6 +117,13 @@
     <string name="update_blocked_hint">GitHub недоступен напрямую из вашей сети. Подключите VPN и повторите — проверка пройдёт через туннель.</string>
     <string name="ping_blocked_hint">Серверы не отвечают напрямую — возможно, сеть их блокирует. Подключите VPN и повторите пинг: проверка пройдёт через туннель.</string>
 
+    <!-- GitHub -->
+    <string name="github_repo_title">Репозиторий на GitHub</string>
+    <string name="github_repo_sub">Исходный код и обсуждения · github.com/ZenesDK/ZenesVPN</string>
+    <string name="github_profile_title">Автор на GitHub</string>
+    <string name="github_profile_sub">github.com/ZenesDK</string>
+    <string name="github_open_error">Не удалось открыть ссылку — браузер не найден</string>
+
     <!-- QR -->
     <string name="qr_prompt">Наведите рамку на QR-код со ссылкой на конфиг</string>
     <string name="qr_torch">Фонарик</string>
