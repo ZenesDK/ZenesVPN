@@ -119,11 +119,20 @@ fun PerAppScreen(onBack: () -> Unit) {
         persist(mode, include, exclude)
     }
 
-    val visibleApps = remember(apps, query, showSystem) {
-        (apps ?: emptyList()).filter { e ->
-            (showSystem || !e.isSystem) &&
-                (query.isBlank() || e.label.contains(query, true) || e.pkg.contains(query, true))
-        }
+    // Selected apps float to the top of the list (alphabetical inside each
+    // group) so the current mode's pick is always one tap away. `selected`
+    // follows the active mode: include-set in include, exclude-set otherwise.
+    val selected = if (mode == Store.PER_APP_INCLUDE) include else exclude
+    val visibleApps = remember(apps, query, showSystem, selected, mode) {
+        (apps ?: emptyList())
+            .filter { e ->
+                (showSystem || !e.isSystem) &&
+                    (query.isBlank() || e.label.contains(query, true) || e.pkg.contains(query, true))
+            }
+            .sortedWith(
+                compareByDescending<AppEntry> { mode != Store.PER_APP_ALL && it.pkg in selected }
+                    .thenBy { it.label.lowercase() },
+            )
     }
 
     Column(modifier = Modifier.fillMaxSize().padding(horizontal = 20.dp)) {
@@ -285,6 +294,7 @@ fun PerAppScreen(onBack: () -> Unit) {
                                 app.pkg in exclude
                             },
                             onToggle = { toggle(app.pkg) },
+                            modifier = Modifier.animateItem(),
                         )
                     }
                 }
@@ -295,7 +305,12 @@ fun PerAppScreen(onBack: () -> Unit) {
 }
 
 @Composable
-private fun AppRow(app: AppEntry, checked: Boolean, onToggle: () -> Unit) {
+private fun AppRow(
+    app: AppEntry,
+    checked: Boolean,
+    onToggle: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     val context = LocalContext.current
     val icon by produceState<Drawable?>(initialValue = null, app.pkg) {
         value = withContext(Dispatchers.IO) {
@@ -307,7 +322,7 @@ private fun AppRow(app: AppEntry, checked: Boolean, onToggle: () -> Unit) {
         }
     }
     Row(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .clickable(onClick = onToggle)
             .padding(vertical = 6.dp, horizontal = 4.dp),
