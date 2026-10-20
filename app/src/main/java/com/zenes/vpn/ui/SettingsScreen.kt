@@ -81,11 +81,11 @@ import com.zenes.vpn.bg.CrashLogger
 import com.zenes.vpn.bg.VpnStateBus
 import com.zenes.vpn.core.Updater
 import com.zenes.vpn.data.Store
-import com.zenes.vpn.ui.theme.VividAmber
-import com.zenes.vpn.ui.theme.VividBlue
-import com.zenes.vpn.ui.theme.VividCyan
-import com.zenes.vpn.ui.theme.VividPink
-import com.zenes.vpn.ui.theme.VividViolet
+import com.zenes.vpn.ui.theme.LavInk
+import com.zenes.vpn.ui.theme.LavMid
+import com.zenes.vpn.ui.theme.LavMist
+import com.zenes.vpn.ui.theme.LavPrimary
+import com.zenes.vpn.ui.theme.LavSoft
 import com.zenes.vpn.ui.theme.cardTintBrush
 import com.zenes.vpn.util.Backup
 import com.zenes.vpn.util.toast
@@ -537,10 +537,10 @@ fun SettingsScreen(onOpenPerApps: () -> Unit, onOpenStats: () -> Unit) {
         Spacer(Modifier.height(8.dp))
 
         // ---------------- backup ----------------
-        SectionLabel(stringResource(R.string.section_backup), dot = VividViolet)
+        SectionLabel(stringResource(R.string.section_backup), dot = LavPrimary)
         BackupRow(
             icon = Icons.Default.SaveAlt,
-            tint = VividBlue,
+            tint = LavPrimary,
             title = stringResource(R.string.backup_export),
             subtitle = stringResource(R.string.backup_export_sub),
         ) {
@@ -550,7 +550,7 @@ fun SettingsScreen(onOpenPerApps: () -> Unit, onOpenStats: () -> Unit) {
         }
         BackupRow(
             icon = Icons.Default.QrCode2,
-            tint = VividCyan,
+            tint = LavMid,
             title = stringResource(R.string.backup_qr),
             subtitle = stringResource(R.string.backup_qr_sub),
         ) {
@@ -566,7 +566,7 @@ fun SettingsScreen(onOpenPerApps: () -> Unit, onOpenStats: () -> Unit) {
         }
         BackupRow(
             icon = Icons.Default.FolderOpen,
-            tint = VividAmber,
+            tint = LavMist,
             title = stringResource(R.string.backup_import),
             subtitle = stringResource(R.string.backup_import_sub),
         ) {
@@ -574,7 +574,7 @@ fun SettingsScreen(onOpenPerApps: () -> Unit, onOpenStats: () -> Unit) {
         }
         BackupRow(
             icon = Icons.Default.QrCodeScanner,
-            tint = VividViolet,
+            tint = LavInk,
             title = stringResource(R.string.backup_scan),
             subtitle = stringResource(R.string.backup_scan_sub),
         ) {
@@ -666,7 +666,7 @@ fun SettingsScreen(onOpenPerApps: () -> Unit, onOpenStats: () -> Unit) {
         Spacer(Modifier.height(8.dp))
 
         // ---------------- diagnostics ----------------
-        SectionLabel(stringResource(R.string.section_diagnostics), dot = VividCyan)
+        SectionLabel(stringResource(R.string.section_diagnostics), dot = LavMid)
         Card(
             shape = RoundedCornerShape(24.dp),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
@@ -761,7 +761,7 @@ fun SettingsScreen(onOpenPerApps: () -> Unit, onOpenStats: () -> Unit) {
         Spacer(Modifier.height(8.dp))
 
         // ---------------- about ----------------
-        SectionLabel(stringResource(R.string.section_about), dot = VividPink)
+        SectionLabel(stringResource(R.string.section_about), dot = LavSoft)
         Box(
             modifier = Modifier
                 .fillMaxWidth()

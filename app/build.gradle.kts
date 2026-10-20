@@ -24,8 +24,8 @@ android {
         applicationId = "com.zenes.vpn"
         minSdk = 24
         targetSdk = 34
-        versionCode = 38
-        versionName = "1.14.3"
+        versionCode = 39
+        versionName = "1.14.4"
         // Real phones are arm64-v8a / armeabi-v7a. Dropping the emulator-only
         // x86 ABIs removes two libbox (~60 MB each) and two barhopper copies,
         // making the in-app self-update download roughly twice as small.

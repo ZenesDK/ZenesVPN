@@ -17,64 +17,77 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 /**
- * Brand "Aurora" schemes, locked to the Zenes identity (the app icon gradient
- * #8A7BFF -> #4E3ED9). Dynamic (wallpaper) color was dropped on purpose: the
- * expressive gradients/chips across the app use fixed vivid anchors, and a
- * wallpaper-driven primary clashed with them. A fixed brand scheme also makes
- * the app look the same on every device — the Material 3 Expressive reference.
+ * Brand "Monotone lavender" schemes, locked to the Zenes identity (the app icon
+ * gradient #8A7BFF -> #4E3ED9). Every role lives in ONE violet hue family —
+ * surfaces are lavender-tinted, tertiary is a second violet tone (the old teal
+ * is gone), error is a dusty rose so it still reads as attention. Dynamic
+ * (wallpaper) color stays dropped on purpose: the monotone system is built on
+ * fixed tonal anchors, and a wallpaper-driven primary would break the single-hue
+ * calm. A fixed brand scheme also makes the app look the same on every device —
+ * the Material 3 Expressive reference.
  */
 private val DarkScheme = darkColorScheme(
-    primary = Color(0xFFCBBEFF),
-    onPrimary = Color(0xFF3A0091),
-    primaryContainer = Color(0xFF5433B8),
-    onPrimaryContainer = Color(0xFFE7DEFF),
-    secondary = Color(0xFFC9C3DD),
-    onSecondary = Color(0xFF322D47),
-    secondaryContainer = Color(0xFF484264),
+    primary = Color(0xFFCBBDF6),
+    onPrimary = Color(0xFF2F1670),
+    primaryContainer = Color(0xFF4A35A8),
+    onPrimaryContainer = Color(0xFFE5DCFF),
+    secondary = Color(0xFFCCC5E2),
+    onSecondary = Color(0xFF332B4A),
+    secondaryContainer = Color(0xFF4A4362),
     onSecondaryContainer = Color(0xFFE6DFFA),
-    tertiary = Color(0xFF85D5C6),
-    onTertiary = Color(0xFF00382F),
-    tertiaryContainer = Color(0xFF005043),
-    onTertiaryContainer = Color(0xFFA1F2E1),
-    error = Color(0xFFFFB4AB),
-    onError = Color(0xFF690005),
-    errorContainer = Color(0xFF93000A),
-    onErrorContainer = Color(0xFFFFDAD6),
-    background = Color(0xFF0F0D17),
-    onBackground = Color(0xFFE7E1F4),
-    surface = Color(0xFF131019),
-    onSurface = Color(0xFFE7E1F4),
-    surfaceVariant = Color(0xFF221C30),
-    onSurfaceVariant = Color(0xFFCBC4D9),
-    outline = Color(0xFF948FA3),
-    outlineVariant = Color(0xFF484154),
+    tertiary = Color(0xFFB9A7EE),
+    onTertiary = Color(0xFF241268),
+    tertiaryContainer = Color(0xFF3D2C96),
+    onTertiaryContainer = Color(0xFFE5DCFF),
+    error = Color(0xFFF5B8CB),
+    onError = Color(0xFF4E0922),
+    errorContainer = Color(0xFF6C2A44),
+    onErrorContainer = Color(0xFFFFD9E4),
+    background = Color(0xFF12101E),
+    onBackground = Color(0xFFE6E1F4),
+    surface = Color(0xFF161327),
+    onSurface = Color(0xFFE6E1F4),
+    surfaceVariant = Color(0xFF272139),
+    onSurfaceVariant = Color(0xFFC8C2DC),
+    outline = Color(0xFF938DA8),
+    outlineVariant = Color(0xFF47405C),
+    surfaceContainerLowest = Color(0xFF100E1A),
+    surfaceContainerLow = Color(0xFF1A1629),
+    surfaceContainer = Color(0xFF201B31),
+    surfaceContainerHigh = Color(0xFF262039),
+    surfaceContainerHighest = Color(0xFF2C2541),
 )
 
 private val LightScheme = lightColorScheme(
-    primary = Color(0xFF5B3FD1),
+    primary = Color(0xFF6247C8),
     onPrimary = Color.White,
-    primaryContainer = Color(0xFFE6DEFF),
-    onPrimaryContainer = Color(0xFF1C0063),
-    secondary = Color(0xFF615B78),
+    primaryContainer = Color(0xFFE4DCF9),
+    onPrimaryContainer = Color(0xFF231263),
+    secondary = Color(0xFF675E86),
     onSecondary = Color.White,
-    secondaryContainer = Color(0xFFE7DFF8),
-    onSecondaryContainer = Color(0xFF1D192C),
-    tertiary = Color(0xFF1F6B5C),
+    secondaryContainer = Color(0xFFE4DEF4),
+    onSecondaryContainer = Color(0xFF211A38),
+    tertiary = Color(0xFF8A72DC),
     onTertiary = Color.White,
-    tertiaryContainer = Color(0xFFA7F2E0),
-    onTertiaryContainer = Color(0xFF00201A),
-    error = Color(0xFFBA1A1A),
+    tertiaryContainer = Color(0xFFE5DCFA),
+    onTertiaryContainer = Color(0xFF2B1368),
+    error = Color(0xFFB25577),
     onError = Color.White,
-    errorContainer = Color(0xFFFFDAD6),
-    onErrorContainer = Color(0xFF410002),
-    background = Color(0xFFFDF8FF),
-    onBackground = Color(0xFF1B1A22),
-    surface = Color(0xFFFDF8FF),
-    onSurface = Color(0xFF1B1A22),
-    surfaceVariant = Color(0xFFE6E1F0),
-    onSurfaceVariant = Color(0xFF484551),
-    outline = Color(0xFF787481),
-    outlineVariant = Color(0xFFC9C5D4),
+    errorContainer = Color(0xFFFADCE6),
+    onErrorContainer = Color(0xFF40081F),
+    background = Color(0xFFEFECF9),
+    onBackground = Color(0xFF1A1726),
+    surface = Color(0xFFF4F1FC),
+    onSurface = Color(0xFF1A1726),
+    surfaceVariant = Color(0xFFE5DFF5),
+    onSurfaceVariant = Color(0xFF47415C),
+    outline = Color(0xFF78728E),
+    outlineVariant = Color(0xFFC9C3DC),
+    surfaceContainerLowest = Color(0xFFFFFFFF),
+    surfaceContainerLow = Color(0xFFF0EDFA),
+    surfaceContainer = Color(0xFFEAE6F7),
+    surfaceContainerHigh = Color(0xFFE4DFF4),
+    surfaceContainerHighest = Color(0xFFDFD9F1),
 )
 
 /** Heavier, more expressive type scale. */

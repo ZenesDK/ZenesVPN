@@ -1,7 +1,9 @@
 package com.zenes.vpn.ui.theme
 
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -15,54 +17,79 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.sp
 
 // ---------------------------------------------------------------------------
-// Vivid accent anchors — the "Aurora" palette used by gradients, chips and
-// state glows. Chosen to be readable on both dark and light backgrounds.
+// Tonal lavender system — the monotone M3 Expressive redesign.
+//
+// One violet hue family carries the whole app: differentiation comes from
+// TONE (depth), not hue, exactly like the reference — a calm lavender field,
+// violet accents, white/pill controls. Rose is the single sanctioned
+// deviation, reserved for attention (errors, expiring subscriptions) so it
+// still reads against the lavender field.
+//
+// The mid tones (LavPrimary..LavSoft, Rose, State*) are tuned to stay
+// readable on BOTH surfaceVariant faces: light #E5DFF5 and dark #272139.
 // ---------------------------------------------------------------------------
-val VividViolet = Color(0xFF8B5CF6)
-val VividBlue = Color(0xFF5B8CFF)
-val VividCyan = Color(0xFF22D3EE)
-val VividGreen = Color(0xFF34D399)
-val VividMint = Color(0xFF4ADE80)
-val VividAmber = Color(0xFFFBBF24)
-val VividOrange = Color(0xFFFB923C)
-val VividPink = Color(0xFFF472B6)
-val VividRed = Color(0xFFF87171)
-val VividSlate = Color(0xFF94A3B8)
+val LavInk = Color(0xFF44339B)      // deepest violet — emphasis, light-theme icons
+val LavPrimary = Color(0xFF6247C8)  // brand violet (the reference button)
+val LavMid = Color(0xFF8A72DC)      // mid lavender — transitions, secondary icons
+val LavSoft = Color(0xFFB3A3EC)     // soft lavender — decorative rings, dots
+val LavPale = Color(0xFFD9CFF6)     // pale lavender — washes, tracks
+val LavMist = Color(0xFF8D87A6)     // neutral lavender-gray — unknown/plain
+val RoseDeep = Color(0xFFA84E77)    // error-end of the rose ramp (light theme)
+val Rose = Color(0xFFC97397)        // attention — dual-readable dusty rose
+val RoseSoft = Color(0xFFE5AEC5)    // attention on the violet hero gradient
 
-/** Deterministic vivid color per protocol, used by the protocol chips. */
-fun protocolColor(proto: String): Color = when (proto.lowercase().trim()) {
-    "vless" -> VividViolet
-    "vmess" -> VividBlue
-    "trojan" -> VividPink
-    "ss", "shadowsocks" -> VividGreen
-    "hysteria", "hysteria2", "hy2" -> VividAmber
-    "tuic" -> VividCyan
-    "wireguard" -> Color(0xFF2DD4BF)
-    "socks", "http" -> VividSlate
-    else -> VividSlate
+/** Hero accent while CONNECTED: deep enough on light, open enough on dark. */
+val StateConnected = Color(0xFF6E54CE)
+
+/** Hero accent while CONNECTING/STOPPING — a lighter, "in motion" tone. */
+val StateTransition = Color(0xFF9078DE)
+
+/**
+ * Deterministic tone per protocol, used by the protocol chips and the
+ * per-server stats bars. Monotone system: every protocol lives in the violet
+ * family and differs only by tone; the neutral lavender-gray is reserved for
+ * plain/unknown protocols. Theme-aware — deep tones on light surfaces, light
+ * tones on dark ones — so chips and bars stay readable in both themes.
+ */
+@Composable
+@ReadOnlyComposable
+fun protocolColor(proto: String): Color {
+    val dark = isSystemInDarkTheme()
+    return when (proto.lowercase().trim()) {
+        "vless" -> if (dark) Color(0xFFC3B4F2) else LavPrimary
+        "vmess" -> if (dark) Color(0xFFD6CBF8) else LavInk
+        "trojan" -> if (dark) Color(0xFFB49FF0) else Color(0xFF6E53CE)
+        "ss", "shadowsocks" -> if (dark) Color(0xFFCFC3F6) else Color(0xFF5445A8)
+        "hysteria", "hysteria2", "hy2" -> if (dark) Color(0xFFAB95EC) else Color(0xFF7C63D2)
+        "tuic" -> if (dark) Color(0xFFDAD0F9) else Color(0xFF5949AE)
+        "wireguard" -> if (dark) Color(0xFFBCA9F1) else Color(0xFF664FBE)
+        "socks", "http" -> if (dark) Color(0xFF9B95B0) else LavMist
+        else -> if (dark) Color(0xFF9B95B0) else LavMist
+    }
 }
 
-/** Diagonal hero gradient used by subscription cards (white content on top). */
+/** Deep-to-mid violet ramp for subscription hero cards (white content on top). */
 @Composable
 fun heroBrush(): Brush = Brush.linearGradient(
-    colors = listOf(VividViolet, VividBlue, VividPink),
+    colors = listOf(LavInk, LavPrimary, LavMid),
 )
 
 /**
- * Soft colorful overlay placed on top of surfaceVariant cards so that the
- * usual gray cards pick up a subtle blue-to-teal sheen.
+ * Soft tonal overlay placed on top of surfaceVariant cards so the usual gray
+ * cards pick up a subtle violet-on-lavender sheen (tertiary is a violet tone
+ * too in the monotone scheme, so the sheen stays in one hue family).
  */
 @Composable
 fun cardTintBrush(): Brush = Brush.linearGradient(
     colors = listOf(
-        MaterialTheme.colorScheme.primary.copy(alpha = 0.10f),
+        MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
         Color.Transparent,
-        MaterialTheme.colorScheme.tertiary.copy(alpha = 0.08f),
+        MaterialTheme.colorScheme.tertiary.copy(alpha = 0.10f),
     ),
 )
 
 /**
- * Small rounded pill with the protocol name in its own vivid color
+ * Small rounded pill with the protocol name in its own tone
  * (semi-transparent tint of the same color as the background).
  */
 @Composable

@@ -15,7 +15,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.zenes.vpn.R
 import com.zenes.vpn.data.Subscription
-import com.zenes.vpn.ui.theme.VividAmber
+import com.zenes.vpn.ui.theme.RoseSoft
 import io.nekohasekai.libbox.Libbox
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -30,8 +30,8 @@ fun subscriptionHasInfo(sub: Subscription): Boolean =
  * Subscription metadata block: wavy usage bar (only with a traffic quota),
  * a traffic line and an expiry line (red when 3 or fewer days remain).
  *
- * With [onHero] = true the block is rendered on a vivid gradient card, so all
- * text switches to white and the warning color becomes amber.
+ * With [onHero] = true the block is rendered on a violet gradient card, so all
+ * text switches to white and the warning color becomes the light rose.
  */
 @Composable
 fun SubInfoContent(sub: Subscription, compact: Boolean, modifier: Modifier = Modifier, onHero: Boolean = false) {
@@ -85,7 +85,7 @@ fun SubInfoContent(sub: Subscription, compact: Boolean, modifier: Modifier = Mod
                     text = stringResource(R.string.sub_info_expires, dateStr, daysLeft),
                     style = bodyStyle,
                     color = when {
-                        onHero && daysLeft <= 3 -> VividAmber
+                        onHero && daysLeft <= 3 -> RoseSoft
                         onHero -> Color.White.copy(alpha = 0.85f)
                         daysLeft <= 3 -> MaterialTheme.colorScheme.error
                         else -> MaterialTheme.colorScheme.onSurfaceVariant
@@ -97,7 +97,7 @@ fun SubInfoContent(sub: Subscription, compact: Boolean, modifier: Modifier = Mod
                 Text(
                     text = stringResource(R.string.sub_info_expired),
                     style = bodyStyle,
-                    color = if (onHero) VividAmber else MaterialTheme.colorScheme.error,
+                    color = if (onHero) RoseSoft else MaterialTheme.colorScheme.error,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )

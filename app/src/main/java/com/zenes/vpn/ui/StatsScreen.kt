@@ -55,9 +55,8 @@ import androidx.compose.ui.unit.dp
 import com.zenes.vpn.R
 import com.zenes.vpn.data.Store
 import com.zenes.vpn.data.StatsStore
-import com.zenes.vpn.ui.theme.VividBlue
-import com.zenes.vpn.ui.theme.VividCyan
-import com.zenes.vpn.ui.theme.VividViolet
+import com.zenes.vpn.ui.theme.LavMid
+import com.zenes.vpn.ui.theme.LavPrimary
 import com.zenes.vpn.ui.theme.cardTintBrush
 import com.zenes.vpn.ui.theme.protocolColor
 import io.nekohasekai.libbox.Libbox
@@ -120,12 +119,12 @@ fun StatsScreen(onBack: () -> Unit) {
                 HeroCell(
                     label = stringResource(R.string.upload_speed),
                     bytes = today?.up ?: 0L,
-                    tint = VividViolet,
+                    tint = LavPrimary,
                 )
                 HeroCell(
                     label = stringResource(R.string.download_speed),
                     bytes = today?.down ?: 0L,
-                    tint = VividCyan,
+                    tint = LavMid,
                 )
             }
         }
@@ -199,7 +198,7 @@ fun StatsScreen(onBack: () -> Unit) {
                                 if (h > 1f) {
                                     drawRoundRect(
                                         brush = Brush.verticalGradient(
-                                            listOf(VividViolet, VividBlue),
+                                            listOf(LavMid, LavPrimary),
                                             startY = size.height - h,
                                             endY = size.height,
                                         ),
@@ -246,7 +245,7 @@ fun StatsScreen(onBack: () -> Unit) {
                     modifier = Modifier
                         .size(8.dp)
                         .clip(CircleShape)
-                        .background(VividViolet),
+                        .background(LavPrimary),
                 )
                 Spacer(Modifier.width(8.dp))
                 Text(

@@ -68,9 +68,9 @@ import com.zenes.vpn.data.Store
 import com.zenes.vpn.data.Subscription
 import com.zenes.vpn.parser.LinkParser
 import com.zenes.vpn.ui.theme.CookieShape
-import com.zenes.vpn.ui.theme.VividAmber
-import com.zenes.vpn.ui.theme.VividCyan
-import com.zenes.vpn.ui.theme.VividViolet
+import com.zenes.vpn.ui.theme.LavMid
+import com.zenes.vpn.ui.theme.LavPrimary
+import com.zenes.vpn.ui.theme.LavSoft
 import com.zenes.vpn.ui.theme.heroBrush
 import com.zenes.vpn.ui.theme.protocolColor
 import com.zenes.vpn.util.Importer
@@ -316,7 +316,7 @@ fun ServersScreen() {
                 SheetItem(
                     icon = Icons.Default.QrCodeScanner,
                     label = stringResource(R.string.scan_qr),
-                    iconTint = VividViolet,
+                    iconTint = LavPrimary,
                 ) {
                     showAddSheet = false
                     CrashLogger.breadcrumb("qr scan opened (server import)")
@@ -325,7 +325,7 @@ fun ServersScreen() {
                 SheetItem(
                     icon = Icons.Default.CloudDownload,
                     label = stringResource(R.string.from_subscription),
-                    iconTint = VividAmber,
+                    iconTint = LavMid,
                 ) {
                     showAddSheet = false
                     showSubDialog = true
@@ -421,7 +421,7 @@ private fun SubscriptionCard(
     onRefresh: () -> Unit,
     onDelete: () -> Unit,
 ) {
-    // Vivid hero gradient makes the subscription the most colorful card on the screen.
+    // The violet hero ramp keeps the subscription the most emphasized card.
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -489,9 +489,9 @@ private fun ServerCard(
             .fillMaxWidth()
             .then(
                 if (selected) {
-                    // Gradient outline around the selected server.
+                    // Tonal outline around the selected server.
                     Modifier.border(
-                        BorderStroke(2.dp, Brush.linearGradient(listOf(VividViolet, VividCyan))),
+                        BorderStroke(2.dp, Brush.linearGradient(listOf(LavPrimary, LavSoft))),
                         shape,
                     )
                 } else {

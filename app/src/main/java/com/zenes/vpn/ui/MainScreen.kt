@@ -76,15 +76,17 @@ import com.zenes.vpn.bg.VpnStateBus
 import com.zenes.vpn.data.Store
 import com.zenes.vpn.ui.theme.CookieShape
 import com.zenes.vpn.ui.theme.ProtoChip
-import com.zenes.vpn.ui.theme.VividAmber
-import com.zenes.vpn.ui.theme.VividBlue
-import com.zenes.vpn.ui.theme.VividCyan
-import com.zenes.vpn.ui.theme.VividGreen
-import com.zenes.vpn.ui.theme.VividMint
-import com.zenes.vpn.ui.theme.VividOrange
-import com.zenes.vpn.ui.theme.VividPink
-import com.zenes.vpn.ui.theme.VividRed
-import com.zenes.vpn.ui.theme.VividViolet
+import com.zenes.vpn.ui.theme.LavInk
+import com.zenes.vpn.ui.theme.LavMid
+import com.zenes.vpn.ui.theme.LavMist
+import com.zenes.vpn.ui.theme.LavPale
+import com.zenes.vpn.ui.theme.LavPrimary
+import com.zenes.vpn.ui.theme.LavSoft
+import com.zenes.vpn.ui.theme.Rose
+import com.zenes.vpn.ui.theme.RoseDeep
+import com.zenes.vpn.ui.theme.RoseSoft
+import com.zenes.vpn.ui.theme.StateConnected
+import com.zenes.vpn.ui.theme.StateTransition
 import com.zenes.vpn.ui.theme.cardTintBrush
 import com.zenes.vpn.ui.theme.heroBrush
 import io.nekohasekai.libbox.Libbox
@@ -137,10 +139,12 @@ fun MainScreen(
                         center = Offset(cx, cy),
                     )
                 }
-                // top-left violet, top-right cyan, faint pink under the button
-                blob(0f, 0f, bigR, VividViolet.copy(alpha = if (dark) 0.34f else 0.20f))
-                blob(size.width, size.height * 0.16f, midR, VividCyan.copy(alpha = if (dark) 0.24f else 0.15f))
-                blob(size.width * 0.12f, size.height * 0.50f, smallR, VividPink.copy(alpha = if (dark) 0.14f else 0.09f))
+                // monotone lavender wash: deep violet top-left, soft lavender
+                // top-right, faint pale halo under the button — one hue family,
+                // only the depth varies (see the tonal system in Palette.kt)
+                blob(0f, 0f, bigR, LavPrimary.copy(alpha = if (dark) 0.30f else 0.18f))
+                blob(size.width, size.height * 0.16f, midR, LavSoft.copy(alpha = if (dark) 0.22f else 0.16f))
+                blob(size.width * 0.12f, size.height * 0.50f, smallR, LavPale.copy(alpha = if (dark) 0.12f else 0.10f))
             },
     ) {
         // ---- adaptive vertical rhythm --------------------------------------
@@ -211,12 +215,14 @@ fun MainScreen(
                 ).value
             }
 
-            // Aurora ring colors follow the connection state.
+            // Ring colors follow the connection state — still one violet family,
+            // states differ by TONE: connected is the deepest ramp, transitioning
+            // is a lighter one, error is the reserved rose ramp.
             val ringTargets = when (state) {
-                VpnStateBus.State.CONNECTED -> listOf(VividGreen, VividCyan, VividMint)
-                VpnStateBus.State.CONNECTING, VpnStateBus.State.STOPPING -> listOf(VividBlue, VividViolet, VividCyan)
-                VpnStateBus.State.ERROR -> listOf(VividRed, VividOrange, VividPink)
-                else -> listOf(VividViolet, VividBlue, VividCyan)
+                VpnStateBus.State.CONNECTED -> listOf(LavInk, LavPrimary, LavMid)
+                VpnStateBus.State.CONNECTING, VpnStateBus.State.STOPPING -> listOf(LavMid, LavSoft, LavPrimary)
+                VpnStateBus.State.ERROR -> listOf(RoseDeep, Rose, RoseSoft)
+                else -> listOf(LavMid, LavSoft, LavMist)
             }
             val ring = List(3) { i ->
                 animateColorAsState(ringTargets[i], tween(700), label = "ring$i").value
@@ -229,9 +235,9 @@ fun MainScreen(
 
             val accent by animateColorAsState(
                 targetValue = when (state) {
-                    VpnStateBus.State.CONNECTED -> VividGreen
-                    VpnStateBus.State.CONNECTING, VpnStateBus.State.STOPPING -> VividBlue
-                    VpnStateBus.State.ERROR -> VividRed
+                    VpnStateBus.State.CONNECTED -> StateConnected
+                    VpnStateBus.State.CONNECTING, VpnStateBus.State.STOPPING -> StateTransition
+                    VpnStateBus.State.ERROR -> Rose
                     else -> MaterialTheme.colorScheme.onSurfaceVariant
                 },
                 animationSpec = spring(dampingRatio = 0.8f, stiffness = 380f),
@@ -452,14 +458,14 @@ fun MainScreen(
                         ) {
                             TrafficCell(
                                 icon = Icons.Default.ArrowUpward,
-                                tint = VividAmber,
+                                tint = LavPrimary,
                                 label = stringResource(R.string.upload_speed),
                                 speed = Libbox.formatBytes(uplink) + "/s",
                                 total = Libbox.formatBytes(uplinkTotal),
                             )
                             TrafficCell(
                                 icon = Icons.Default.ArrowDownward,
-                                tint = VividCyan,
+                                tint = LavMid,
                                 label = stringResource(R.string.download_speed),
                                 speed = Libbox.formatBytes(downlink) + "/s",
                                 total = Libbox.formatBytes(downlinkTotal),
