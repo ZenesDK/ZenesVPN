@@ -28,7 +28,9 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -64,6 +66,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -86,7 +89,7 @@ import com.zenes.vpn.ui.theme.cardTintBrush
 import com.zenes.vpn.ui.theme.heroBrush
 import io.nekohasekai.libbox.Libbox
 
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun MainScreen(
     onConnectToggle: () -> Unit,
@@ -115,7 +118,7 @@ fun MainScreen(
 
     val dark = isSystemInDarkTheme()
 
-    Box(
+    BoxWithConstraints(
         modifier = Modifier
             .fillMaxSize()
             .drawBehind {
@@ -140,8 +143,31 @@ fun MainScreen(
                 blob(size.width * 0.12f, size.height * 0.50f, smallR, VividPink.copy(alpha = if (dark) 0.14f else 0.09f))
             },
     ) {
-        // verticalScroll: on shorter screens (or large font scale) the content
-        // used to overflow and the traffic card got clipped to an empty pill.
+        // ---- adaptive vertical rhythm --------------------------------------
+        // The roomy layout (hero cookie + pill + server/subscription/traffic
+        // cards) is ~760 dp tall in the worst case (connected, subscription
+        // with info). On shorter screens — or with an enlarged system font —
+        // it used to overflow and the home screen became scrollable. Measure
+        // the real available height and compress the hero cookie and the
+        // spacers just enough to fit: pressure 0 = untouched roomy look,
+        // 1 = fully compressed. verticalScroll stays as a safety net for
+        // extreme font scales / tiny screens.
+        val fontBoost = 120.dp * ((LocalDensity.current.fontScale - 1f).coerceAtLeast(0f))
+        val deficit = (760.dp + fontBoost - maxHeight).value.coerceAtLeast(0f)
+        val pressure = (deficit / 106f).coerceIn(0f, 1f)
+        val heroFace = (212f - 62f * pressure).dp
+        val heroRing = heroFace + 22.dp
+        val heroGlow = heroFace + 46.dp
+        val powerIconSize = (96f - 26f * pressure).dp
+        val loadingSize = (88f - 24f * pressure).dp
+        val spTop = (24f - 12f * pressure).dp
+        val spAfterHero = (16f - 8f * pressure).dp
+        val spAfterPill = (6f - 2f * pressure).dp
+        val spAfterCountry = (16f - 8f * pressure).dp
+        val spCardGap = (12f - 4f * pressure).dp
+        val spBottom = (16f - 6f * pressure).dp
+        val subCompact = pressure > 0.5f
+
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -149,7 +175,7 @@ fun MainScreen(
                 .padding(horizontal = 20.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Spacer(Modifier.height(24.dp))
+            Spacer(Modifier.height(spTop))
 
             // ------------- cookie power button with aurora halo -------------
             val interaction = remember { MutableInteractionSource() }
@@ -216,7 +242,7 @@ fun MainScreen(
                 // soft glow behind everything
                 Box(
                     modifier = Modifier
-                        .size(258.dp)
+                        .size(heroGlow)
                         .background(
                             Brush.radialGradient(
                                 listOf(glowColor.copy(alpha = if (dark) 0.30f else 0.20f), Color.Transparent),
@@ -226,14 +252,14 @@ fun MainScreen(
                 // rotating aurora ring (the icon stays still)
                 Box(
                     modifier = Modifier
-                        .size(234.dp)
+                        .size(heroRing)
                         .graphicsLayer { rotationZ = spin }
                         .background(ringBrush, CookieShape()),
                 )
                 // cookie face
                 Box(
                     modifier = Modifier
-                        .size(212.dp)
+                        .size(heroFace)
                         .graphicsLayer {
                             scaleX = pressScale
                             scaleY = pressScale
@@ -257,20 +283,20 @@ fun MainScreen(
                         label = "powerFace",
                     ) { isBusy ->
                         if (isBusy) {
-                            LoadingIndicator(color = accent, modifier = Modifier.size(88.dp))
+                            LoadingIndicator(color = accent, modifier = Modifier.size(loadingSize))
                         } else {
                             Icon(
                                 imageVector = Icons.Default.PowerSettingsNew,
                                 contentDescription = stringResource(R.string.btn_connect),
                                 tint = accent,
-                                modifier = Modifier.size(96.dp),
+                                modifier = Modifier.size(powerIconSize),
                             )
                         }
                     }
                 }
             }
 
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(spAfterHero))
 
             // status pill — springy color, slide-up text transition
             Surface(
@@ -294,7 +320,7 @@ fun MainScreen(
                 }
             }
 
-            Spacer(Modifier.height(6.dp))
+            Spacer(Modifier.height(spAfterPill))
             Text(
                 text = (selected?.flag?.plus(" ") ?: "") + (
                     selected?.name ?: stringResource(R.string.no_server_selected)
@@ -305,7 +331,7 @@ fun MainScreen(
                 overflow = TextOverflow.Ellipsis,
             )
 
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(spAfterCountry))
 
             // ------------- current server card -------------
             Box(
@@ -363,7 +389,7 @@ fun MainScreen(
 
             // ------------- subscription card (hero gradient) -------------
             if (sub != null && subscriptionHasInfo(sub)) {
-                Spacer(Modifier.height(12.dp))
+                Spacer(Modifier.height(spCardGap))
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -394,7 +420,7 @@ fun MainScreen(
                             overflow = TextOverflow.Ellipsis,
                         )
                         Spacer(Modifier.height(6.dp))
-                        SubInfoContent(sub, compact = false, onHero = true)
+                        SubInfoContent(sub, compact = subCompact, onHero = true)
                     }
                 }
             }
@@ -408,7 +434,7 @@ fun MainScreen(
                     shrinkVertically(tween(240, easing = FastOutSlowInEasing)),
             ) {
                 Column {
-                    Spacer(Modifier.height(12.dp))
+                    Spacer(Modifier.height(spCardGap))
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -443,7 +469,7 @@ fun MainScreen(
                 }
             }
 
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(spBottom))
         }
     }
 }
