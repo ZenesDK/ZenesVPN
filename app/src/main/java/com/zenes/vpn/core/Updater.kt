@@ -46,15 +46,20 @@ import java.net.HttpURLConnection
  * connect the VPN and retry, the check will ride the tunnel (and indeed
  * retries once automatically, see [retryOnConnect]).
  *
- * Versions: while the project iterates through pre-releases, the check
- * looks at the newest NON-DRAFT release (pre-release or not) — otherwise
- * /releases/latest would hide pre-release builds and in-app updates would
- * stall every time a build ships as a pre-release.
+ * Update channel (Store.updateChannel, set in Settings):
+ * - UPDATE_ALL — the newest NON-DRAFT release, pre-release or not
+ *   (/releases list). Pre-releases are badged in the update dialog.
+ * - UPDATE_STABLE — /releases/latest only, i.e. full releases; pre-releases
+ *   are invisible on this channel. A user sitting on a pre-release sees
+ *   "up to date" until a newer stable ships, which is correct.
  */
 object Updater {
 
     private const val RELEASES_URL =
         "https://api.github.com/repos/ZenesDK/ZenesVPN/releases?per_page=10"
+    /** Stable channel: GitHub resolves it to the newest non-draft non-prerelease release. */
+    private const val LATEST_STABLE_URL =
+        "https://api.github.com/repos/ZenesDK/ZenesVPN/releases/latest"
     private const val CONNECT_TIMEOUT = 8_000
     private const val READ_TIMEOUT = 12_000
     /** Auto-check (app start) is throttled to once per 4 hours — polite to api.github.com. */
@@ -207,13 +212,16 @@ object Updater {
 
     // ------------------------------------------------------------ internals
 
-    private fun fetchLatest(context: Context): State.Available? =
-        NetPath.withSmartPath(context, "update check", tunnelFirst = true) { network ->
-            fetchVia(network)
+    private fun fetchLatest(context: Context): State.Available? {
+        val stableOnly = Store(context).updateChannel == Store.UPDATE_STABLE
+        return NetPath.withSmartPath(context, "update check", tunnelFirst = true) { network ->
+            fetchVia(network, stableOnly)
         }
+    }
 
-    private fun fetchVia(network: Network?): State.Available? {
-        val conn = NetPath.open(RELEASES_URL, network)
+    private fun fetchVia(network: Network?, stableOnly: Boolean): State.Available? {
+        val endpoint = if (stableOnly) LATEST_STABLE_URL else RELEASES_URL
+        val conn = NetPath.open(endpoint, network)
         try {
             conn.connectTimeout = CONNECT_TIMEOUT
             conn.readTimeout = READ_TIMEOUT
@@ -221,16 +229,21 @@ object Updater {
             conn.setRequestProperty("User-Agent", "ZenesVPN/${BuildConfig.VERSION_NAME}")
             if (conn.responseCode != 200) throw Exception("HTTP ${conn.responseCode}")
             val body = conn.inputStream.bufferedReader().use { it.readText() }
-            val releases = org.json.JSONArray(body)
-            var release: JSONObject? = null
-            for (i in 0 until releases.length()) {
-                val r = releases.optJSONObject(i) ?: continue
-                if (!r.optBoolean("draft")) {
-                    release = r
-                    break
+            val release: JSONObject = if (stableOnly) {
+                // /releases/latest answers with a single release object.
+                JSONObject(body)
+            } else {
+                val releases = org.json.JSONArray(body)
+                var found: JSONObject? = null
+                for (i in 0 until releases.length()) {
+                    val r = releases.optJSONObject(i) ?: continue
+                    if (!r.optBoolean("draft")) {
+                        found = r
+                        break
+                    }
                 }
+                found ?: throw Exception("no releases")
             }
-            release ?: throw Exception("no releases")
             val tag = release.optString("tag_name").removePrefix("v")
             var url: String? = null
             var size = 0L
