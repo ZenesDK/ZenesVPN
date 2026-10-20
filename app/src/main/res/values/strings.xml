@@ -93,6 +93,8 @@
     <string name="notif_session_traffic">Session: ↓ %1$s · ↑ %2$s</string>
     <string name="notif_tunnel_dead">Connected, but no traffic through the tunnel — the network may block this server (UDP is often cut on mobile data). Try another server or Wi-Fi.</string>
     <string name="err_reconnect_failed">Could not restore the connection after several attempts</string>
+    <string name="err_vpn_permission_revoked">VPN permission was reset (this happens after an app update or system cleanup). Tap Connect and confirm the system dialog.</string>
+    <string name="err_vpn_interface_blocked">Could not create the VPN interface — another VPN app may be active (always-on/lockdown). Disconnect other VPNs and reconnect.</string>
 
     <!-- Updates -->
     <string name="update_check">Check for updates</string>

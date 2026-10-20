@@ -93,6 +93,8 @@
     <string name="notif_session_traffic">За сессию: ↓ %1$s · ↑ %2$s</string>
     <string name="notif_tunnel_dead">Подключено, но трафик через туннель не идёт — возможно, сеть блокирует этот сервер (на мобильном интернете UDP часто режут). Смените сервер или попробуйте Wi-Fi.</string>
     <string name="err_reconnect_failed">Не удалось восстановить подключение после нескольких попыток</string>
+    <string name="err_vpn_permission_revoked">Разрешение VPN сброшено (так бывает после обновления приложения или чистки системы). Нажмите «Подключить» и подтвердите системный запрос.</string>
+    <string name="err_vpn_interface_blocked">Не удалось создать VPN-интерфейс — возможно, активен другой VPN (always-on/блокировка). Отключите другие VPN и переподключитесь.</string>
 
     <!-- Обновления -->
     <string name="update_check">Проверить обновления</string>

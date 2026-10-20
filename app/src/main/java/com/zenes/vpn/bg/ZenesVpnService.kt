@@ -91,6 +91,16 @@ class ZenesVpnService : VpnService(), PlatformInterface, CommandServerHandler {
     @Volatile private var shouldStop = false
     @Volatile private var boxStarted = false
     @Volatile private var stopInProgress = false
+    /**
+     * The system revoked/cleared the VPN consent (it happens on app update,
+     * some OEM "cleaners" and policy resets). establish() can NEVER succeed
+     * until the user re-grants it from the UI — retrying would burn the whole
+     * reconnect budget on a deterministic failure, so the watchdog and the
+     * retry machinery check this flag and stop honestly instead. Only an
+     * explicit user START (the Connect button runs VpnService.prepare + the
+     * consent dialog) clears it.
+     */
+    @Volatile private var consentMissing = false
     @Volatile private var vpnPfd: ParcelFileDescriptor? = null
 
     /**
@@ -193,6 +203,10 @@ class ZenesVpnService : VpnService(), PlatformInterface, CommandServerHandler {
             wantsConnected = Store(this).serviceWanted
             CrashLogger.breadcrumb("sticky restart: serviceWanted=$wantsConnected")
         } else {
+            // An explicit user action (Connect button / per-app apply): the UI
+            // has just run VpnService.prepare, so consent is freshly granted —
+            // a previous revoked-consent verdict no longer applies.
+            consentMissing = false
             wantsConnected = true
             Store(this).serviceWanted = true
         }
@@ -725,8 +739,15 @@ class ZenesVpnService : VpnService(), PlatformInterface, CommandServerHandler {
         // the service keeps ownership of the handle, so stop()/onDestroy() can
         // tear the VPN interface down immediately, even if the Go engine is
         // unresponsive or slow to close the fd itself.
+        if (VpnService.prepare(this) != null) {
+            // Deterministic: establish() would return null anyway. Distinguish
+            // it so the retry machinery stops instead of burning the budget.
+            consentMissing = true
+            CrashLogger.breadcrumb("openTun: VPN consent is missing (prepare() returned an intent)")
+            throw Exception(getString(R.string.err_vpn_permission_revoked))
+        }
         val pfd = builder.establish()
-            ?: throw Exception("establish() failed — VPN permission missing or revoked")
+            ?: throw Exception(getString(R.string.err_vpn_interface_blocked))
         closeTunInterface() // safety: replace any leftover previous interface
         vpnPfd = pfd
         val fd = pfd.fd
@@ -1143,6 +1164,9 @@ class ZenesVpnService : VpnService(), PlatformInterface, CommandServerHandler {
                 }
                 VpnStateBus.State.ERROR -> {
                     connectedSinceMs = 0L
+                    // Revoked consent is not a network hiccup: reconnecting
+                    // without the user re-granting it just loops forever.
+                    if (consentMissing) return
                     if (!retryPending && !stopInProgress) {
                         CrashLogger.breadcrumb("watchdog: ERROR state, scheduling reconnect")
                         scheduleRetry()
@@ -1161,6 +1185,18 @@ class ZenesVpnService : VpnService(), PlatformInterface, CommandServerHandler {
 
     private fun scheduleRetry() {
         if (!wantsConnected || retryPending || stopInProgress) return
+        if (consentMissing) {
+            // Revoked VPN consent never heals by itself — retrying would burn
+            // the whole budget on the same dialog-less failure. Stop honestly:
+            // the Connect button re-runs the consent flow from the UI.
+            CrashLogger.breadcrumb("auto-reconnect: aborted — VPN consent missing, user action required")
+            VpnStateBus.post(VpnStateBus.State.ERROR, getString(R.string.err_vpn_permission_revoked))
+            mainHandler.post {
+                stopForeground(STOP_FOREGROUND_REMOVE)
+                stopSelf()
+            }
+            return
+        }
         if (retryAttempt >= MAX_RETRIES) {
             CrashLogger.breadcrumb("auto-reconnect: attempts exhausted")
             VpnStateBus.post(VpnStateBus.State.ERROR, getString(R.string.err_reconnect_failed))
