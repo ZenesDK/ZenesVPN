@@ -1,34 +1,30 @@
 package com.zenes.vpn.util
 
 import android.content.Context
-import android.os.SystemClock
+import android.net.Network
 import android.widget.Toast
 import com.zenes.vpn.data.ServerProfile
 import com.zenes.vpn.data.Store
 import com.zenes.vpn.parser.LinkParser
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import java.net.InetSocketAddress
-import java.net.Socket
-import java.net.URL
 
-/** TCP connect latency in ms; null when unreachable. */
-suspend fun tcpPing(host: String, port: Int, timeoutMs: Int = 3000): Int? =
-    withContext(Dispatchers.IO) {
-        try {
-            val socket = Socket()
-            val started = SystemClock.elapsedRealtime()
-            socket.connect(InetSocketAddress(host, port), timeoutMs)
-            val elapsed = (SystemClock.elapsedRealtime() - started).toInt()
-            try {
-                socket.close()
-            } catch (_: Throwable) {
-            }
-            elapsed
-        } catch (_: Throwable) {
-            null
-        }
-    }
+/**
+ * TCP connect latency in ms; null when unreachable.
+ *
+ * Measures direct (physical-network) reachability first; when the tunnel is
+ * up and the direct path fails, falls back through the tunnel (see
+ * [NetPath.tcpConnectMs]) — on censored networks servers are often blocked
+ * directly but perfectly alive behind the proxy.
+ */
+suspend fun tcpPing(
+    context: Context? = null,
+    host: String,
+    port: Int,
+    timeoutMs: Int = 3000,
+): Int? = withContext(Dispatchers.IO) {
+    NetPath.tcpConnectMs(context, host, port, timeoutMs)
+}
 
 fun toast(context: Context, message: String) {
     try {
@@ -77,7 +73,7 @@ object Importer {
     suspend fun importSubscription(context: Context, url: String): kotlin.Result<Int> =
         withContext(Dispatchers.IO) {
             try {
-                val fetched = fetchSubscription(url)
+                val fetched = fetchSubscription(context, url)
                 val store = Store(context)
                 val sub = store.subs().firstOrNull { it.url == url } ?: store.addSub("", url)
                 val profiles = mutableListOf<ServerProfile>()
@@ -109,9 +105,14 @@ object Importer {
         }
 
     /** Fetches a subscription URL and parses the standard headers next to the body. */
-    fun fetchSubscription(url: String): SubFetch {
-        val connection = URL(url).openConnection() as java.net.HttpURLConnection
-        connection.connectTimeout = 15000
+    fun fetchSubscription(context: Context, url: String): SubFetch =
+        NetPath.withSmartPath(context, "subscription fetch", tunnelFirst = true) { network ->
+            fetchVia(url, network)
+        }
+
+    private fun fetchVia(url: String, network: Network?): SubFetch {
+        val connection = NetPath.open(url, network)
+        connection.connectTimeout = 10000
         connection.readTimeout = 15000
         connection.instanceFollowRedirects = true
         connection.setRequestProperty("User-Agent", "ZenesVPN/1.4")

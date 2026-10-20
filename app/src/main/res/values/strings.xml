@@ -113,6 +113,8 @@
     <string name="update_action_install">Install</string>
     <string name="update_install_permission_hint">Allow installing unknown apps for ZenesVPN, then tap Install again.</string>
     <string name="update_error">Update check failed: %1$s</string>
+    <string name="update_blocked_hint">GitHub is unreachable directly from your network. Connect the VPN and retry — the check will go through the tunnel.</string>
+    <string name="ping_blocked_hint">Servers are unreachable directly — the network may be blocking them. Connect the VPN and ping again to check through the tunnel.</string>
 
     <!-- QR -->
     <string name="qr_prompt">Place a QR code with the config link inside the frame</string>

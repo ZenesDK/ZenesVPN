@@ -30,6 +30,17 @@ object SubscriptionUpdater {
     private const val TICK_MS = 15 * 60 * 1000L          // loop period
     private const val LAUNCH_THROTTLE_MS = 15 * 60 * 1000L // "launch" mode min gap
 
+    /**
+     * Set when the latest pass had failures (the typical case: VPN down and
+     * the network drops the provider's host directly). ZenesApp watches it
+     * and runs one forced pass as soon as the tunnel connects — the refresh
+     * then rides the tunnel and succeeds on censored networks. Cleared by
+     * any fully successful pass.
+     */
+    @Volatile
+    var retryOnConnect: Boolean = false
+        private set
+
     fun start(context: Context, scope: CoroutineScope) {
         val appContext = context.applicationContext
         scope.launch(Dispatchers.IO) {
@@ -47,8 +58,14 @@ object SubscriptionUpdater {
         }
     }
 
-    /** Refreshes every subscription if the configured interval has elapsed. */
-    suspend fun runDue(context: Context) {
+    /**
+     * Refreshes every subscription if the configured interval has elapsed.
+     *
+     * @param force skip the interval check (tunnel-up retry: the user just
+     * connected the VPN after a failed pass — refresh now, don't wait a
+     * full period for an attempt that will likely fail again without it).
+     */
+    suspend fun runDue(context: Context, force: Boolean = false) {
         val store = Store(context)
         val mode = store.subAutoUpdate
         if (mode == Store.SUB_AUTO_OFF) return
@@ -70,8 +87,12 @@ object SubscriptionUpdater {
         val effective = maxOf(userInterval, providerFloorMs)
 
         val now = System.currentTimeMillis()
-        if (now - store.subAutoLastCheck < effective) return
-        store.subAutoLastCheck = now
+        if (force) {
+            // A retry must not push the regular schedule forward.
+        } else {
+            if (now - store.subAutoLastCheck < effective) return
+            store.subAutoLastCheck = now
+        }
 
         var updated = 0
         var failed = 0
@@ -84,7 +105,13 @@ object SubscriptionUpdater {
             }
         }
         CrashLogger.breadcrumb(
-            "subscription auto-update: mode=$mode updated=$updated failed=$failed",
+            "subscription auto-update: mode=$mode updated=$updated failed=$failed${if (force) " retry" else ""}",
         )
+        retryOnConnect = failed > 0
+    }
+
+    /** One clean retry after the tunnel comes up (see ZenesApp) — only when the last pass failed. */
+    suspend fun retryDueIfFailed(context: Context) {
+        if (retryOnConnect) runDue(context, force = true)
     }
 }

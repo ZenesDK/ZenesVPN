@@ -113,6 +113,8 @@
     <string name="update_action_install">Установить</string>
     <string name="update_install_permission_hint">Разрешите установку для ZenesVPN в системных настройках и повторите.</string>
     <string name="update_error">Не удалось проверить обновления: %1$s</string>
+    <string name="update_blocked_hint">GitHub недоступен напрямую из вашей сети. Подключите VPN и повторите — проверка пройдёт через туннель.</string>
+    <string name="ping_blocked_hint">Серверы не отвечают напрямую — возможно, сеть их блокирует. Подключите VPN и повторите пинг: проверка пройдёт через туннель.</string>
 
     <!-- QR -->
     <string name="qr_prompt">Наведите рамку на QR-код со ссылкой на конфиг</string>

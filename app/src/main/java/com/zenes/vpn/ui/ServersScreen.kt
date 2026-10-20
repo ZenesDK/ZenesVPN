@@ -74,6 +74,7 @@ import com.zenes.vpn.ui.theme.VividViolet
 import com.zenes.vpn.ui.theme.heroBrush
 import com.zenes.vpn.ui.theme.protocolColor
 import com.zenes.vpn.util.Importer
+import com.zenes.vpn.util.NetPath
 import com.zenes.vpn.util.tcpPing
 import com.zenes.vpn.util.toast
 import kotlinx.coroutines.delay
@@ -144,13 +145,23 @@ fun ServersScreen() {
                         pingingAll = 1
                         val snapshot = servers
                         scope.launch {
+                            var unreachable = 0
                             snapshot.forEach { profile ->
-                                val ms = tcpPing(profile.host, profile.port)
+                                val ms = tcpPing(context, profile.host, profile.port)
+                                if (ms == null) unreachable++
                                 Store(context).updatePing(profile.id, ms ?: -2)
                                 delay(30)
                             }
                             pingingAll = 0
                             reload()
+                            // Everything dead + tunnel down: on carrier/censored
+                            // networks server IPs are blocked directly — say so
+                            // instead of leaving a wall of dashes.
+                            if (snapshot.isNotEmpty() && unreachable == snapshot.size &&
+                                !NetPath.tunnelUp()
+                            ) {
+                                toast(context, context.getString(R.string.ping_blocked_hint))
+                            }
                         }
                     },
                 ) {
@@ -239,7 +250,7 @@ fun ServersScreen() {
                             },
                             onPing = {
                                 scope.launch {
-                                    val ms = tcpPing(profile.host, profile.port)
+                                    val ms = tcpPing(context, profile.host, profile.port)
                                     Store(context).updatePing(profile.id, ms ?: -2)
                                     reload()
                                 }

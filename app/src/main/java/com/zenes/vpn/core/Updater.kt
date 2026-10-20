@@ -2,16 +2,16 @@ package com.zenes.vpn.core
 
 import android.content.Context
 import android.content.Intent
-import android.net.ConnectivityManager
 import android.net.Network
-import android.net.NetworkCapabilities
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
 import androidx.core.content.FileProvider
 import com.zenes.vpn.BuildConfig
+import com.zenes.vpn.R
 import com.zenes.vpn.bg.CrashLogger
 import com.zenes.vpn.data.Store
+import com.zenes.vpn.util.NetPath
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -23,7 +23,6 @@ import org.json.JSONObject
 import java.io.File
 import java.io.FileOutputStream
 import java.net.HttpURLConnection
-import java.net.URL
 
 /**
  * Self-updater for builds distributed via GitHub Releases.
@@ -38,20 +37,21 @@ import java.net.URL
  * for a signature-matched update. "Download & install" therefore means:
  * the app downloads everything and only the final OS confirm button remains.
  *
- * Networking: while the VPN is up, plain sockets of THIS app are routed
- * through the tunnel (through the user's proxy) — small API calls may
- * survive, but the ~60 MB APK download over a flaky proxy stalls. All
- * updater requests therefore run on the underlying physical network
- * (bound via [Network], the app-level equivalent of VpnService.protect),
- * with an automatic fallback to the default routing (through the tunnel)
- * in case GitHub is only reachable via the proxy on a given network.
+ * Networking: path order follows the live VPN state (see [NetPath]).
+ * The check is a small API call — through the tunnel first when it is up
+ * (on carrier/censored networks direct GitHub is silently dropped), with a
+ * direct fallback. The ~60 MB APK download goes direct-first (a flaky proxy
+ * must not stall it) and falls back to the tunnel. When the VPN is down
+ * there is a single direct attempt — plus a clear hint in the error:
+ * connect the VPN and retry, the check will ride the tunnel (and indeed
+ * retries once automatically, see [retryOnConnect]).
  */
 object Updater {
 
     private const val LATEST_URL =
         "https://api.github.com/repos/ZenesDK/ZenesVPN/releases/latest"
-    private const val CONNECT_TIMEOUT = 15_000
-    private const val READ_TIMEOUT = 20_000
+    private const val CONNECT_TIMEOUT = 8_000
+    private const val READ_TIMEOUT = 12_000
     /** Auto-check (app start) is throttled to once per 4 hours — polite to api.github.com. */
     private const val AUTO_CHECK_INTERVAL_MS = 4 * 60 * 60 * 1000L
 
@@ -75,17 +75,29 @@ object Updater {
     private val _state = MutableStateFlow<State>(State.Idle)
     val state: StateFlow<State> = _state.asStateFlow()
 
+    /**
+     * Set when the latest check failed while the tunnel was down (the typical
+     * carrier/censored-network case: direct GitHub is dropped). ZenesApp
+     * watches it and runs one forced re-check as soon as the tunnel connects.
+     * Cleared by any successful check.
+     */
+    @Volatile
+    var retryOnConnect: Boolean = false
+        private set
+
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     /**
-     * @param auto true = silent check on app start (throttled via Store,
-     *             failures stay silent — the Settings row reports them on demand);
-     *             false = explicit check from Settings (failures become visible state).
+     * @param auto  true = silent check on app start (throttled via Store,
+     *              failures stay silent — the Settings row reports them on demand);
+     *              false = explicit check from Settings (failures become visible state).
+     * @param force skip the 4 h throttle (used by the tunnel-up retry);
+     *              does not advance the throttle timestamp either.
      */
-    fun checkAsync(context: Context, auto: Boolean) {
+    fun checkAsync(context: Context, auto: Boolean, force: Boolean = false) {
         if (_state.value is State.Checking || _state.value is State.Downloading) return
         val appContext = context.applicationContext
-        if (auto) {
+        if (auto && !force) {
             val store = Store(appContext)
             val now = System.currentTimeMillis()
             if (now - store.lastUpdateCheck < AUTO_CHECK_INTERVAL_MS) return
@@ -95,6 +107,7 @@ object Updater {
             _state.value = State.Checking
             try {
                 val info = fetchLatest(appContext)
+                retryOnConnect = false
                 _state.value = if (info == null || !isNewer(BuildConfig.VERSION_NAME, info.version)) {
                     State.UpToDate
                 } else {
@@ -103,7 +116,15 @@ object Updater {
                 }
             } catch (t: Throwable) {
                 CrashLogger.breadcrumb("update check failed: ${t.message}")
-                _state.value = State.Failed(t.message ?: "network error")
+                retryOnConnect = true
+                val message = buildString {
+                    append(t.message ?: "network error")
+                    if (!NetPath.tunnelUp()) {
+                        append(" · ")
+                        append(appContext.getString(R.string.update_blocked_hint))
+                    }
+                }
+                _state.value = State.Failed(message)
             }
         }
     }
@@ -179,60 +200,13 @@ object Updater {
 
     // ------------------------------------------------------------ internals
 
-    /**
-     * Best underlying (non-VPN) network for bypassing our own tunnel, or null
-     * if there is none (VPN off / no internet-capable physical network).
-     * Sockets bound to this network skip the tun entirely — the same effect
-     * VpnService.protect() gives the engine's own outbound connections.
-     */
-    private fun bypassNetwork(context: Context): Network? {
-        val cm = context.getSystemService(ConnectivityManager::class.java) ?: return null
-        var candidate: Network? = null
-        for (net in cm.allNetworks) {
-            val caps = cm.getNetworkCapabilities(net) ?: continue
-            if (caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN)) continue
-            if (!caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)) continue
-            if (caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)) return net
-            if (candidate == null) candidate = net
-        }
-        return candidate
-    }
-
-    /**
-     * Runs [block] first on the physical network (direct, bypassing our
-     * tunnel) and, if that throws, again on the default routing — which is
-     * through the tunnel while the VPN is up. Covers both worlds: a flaky
-     * proxy does not break big downloads, and networks where GitHub itself
-     * is blocked still go via the user's proxy.
-     */
-    private inline fun <T> withNetworkFallback(
-        context: Context,
-        tag: String,
-        block: (Network?) -> T,
-    ): T {
-        val bypass = bypassNetwork(context)
-        if (bypass == null) {
-            CrashLogger.breadcrumb("update $tag: no bypass network, default routing")
-            return block(null)
-        }
-        try {
-            return block(bypass)
-        } catch (t: Throwable) {
-            CrashLogger.breadcrumb("update $tag via direct failed: ${t.message}")
-            return block(null)
-        }
-    }
-
-    /** Opens the URL on the given network (null = default routing); DNS resolves via the same network. */
-    private fun open(url: String, network: Network?): HttpURLConnection =
-        if (network != null) network.openConnection(URL(url)) as HttpURLConnection
-        else URL(url).openConnection() as HttpURLConnection
-
     private fun fetchLatest(context: Context): State.Available? =
-        withNetworkFallback(context, "check") { network -> fetchVia(network) }
+        NetPath.withSmartPath(context, "update check", tunnelFirst = true) { network ->
+            fetchVia(network)
+        }
 
     private fun fetchVia(network: Network?): State.Available? {
-        val conn = open(LATEST_URL, network)
+        val conn = NetPath.open(LATEST_URL, network)
         try {
             conn.connectTimeout = CONNECT_TIMEOUT
             conn.readTimeout = READ_TIMEOUT
@@ -263,10 +237,13 @@ object Updater {
     }
 
     private fun download(context: Context, url: String, out: File) =
-        withNetworkFallback(context, "download") { network -> downloadVia(url, out, network) }
+        // Direct first: the ~60 MB APK must not depend on a flaky proxy.
+        NetPath.withSmartPath(context, "update download", tunnelFirst = false) { network ->
+            downloadVia(url, out, network)
+        }
 
     private fun downloadVia(url: String, out: File, network: Network?) {
-        val conn = open(url, network)
+        val conn = NetPath.open(url, network)
         try {
             conn.connectTimeout = CONNECT_TIMEOUT
             conn.readTimeout = 30_000

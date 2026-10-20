@@ -31,6 +31,7 @@ import androidx.navigation.compose.rememberNavController
 import com.zenes.vpn.R
 import com.zenes.vpn.bg.BoxClient
 import com.zenes.vpn.bg.VpnStateBus
+import kotlinx.coroutines.launch
 import com.zenes.vpn.core.Updater
 import com.zenes.vpn.util.SubscriptionUpdater
 
@@ -74,6 +75,20 @@ fun ZenesApp(onConnectToggle: () -> Unit) {
         // every 15 min while the app is alive; the interval itself is user
         // configurable in Settings → Subscriptions (default: on app launch).
         SubscriptionUpdater.start(appContext, this)
+        // One clean retry through the tunnel: on carrier/censored networks the
+        // launch-time update check and subscription refresh fail while the VPN
+        // is down (direct GitHub / provider hosts are silently dropped). As
+        // soon as the tunnel connects, give both a single forced retry.
+        launch {
+            VpnStateBus.state.collect { st ->
+                if (st == VpnStateBus.State.CONNECTED) {
+                    if (Updater.retryOnConnect) {
+                        Updater.checkAsync(appContext, auto = true, force = true)
+                    }
+                    SubscriptionUpdater.retryDueIfFailed(appContext)
+                }
+            }
+        }
     }
 
     Scaffold(
