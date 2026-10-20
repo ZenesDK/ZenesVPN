@@ -227,6 +227,20 @@ class Store(context: Context) {
         get() = prefs.getBoolean(KEY_AUTOSTART, false)
         set(value) = prefs.edit().putBoolean(KEY_AUTOSTART, value).apply()
 
+    /** Watchdog: bring the tunnel back by itself after an unexpected drop. */
+    var autoReconnect: Boolean
+        get() = prefs.getBoolean(KEY_AUTO_RECONNECT, true)
+        set(value) = prefs.edit().putBoolean(KEY_AUTO_RECONNECT, value).apply()
+
+    /**
+     * True while the user wants the tunnel up. Persisted so a START_STICKY
+     * service recreation (process killed by the system / aggressive ROM)
+     * knows whether it should reconnect on its own.
+     */
+    var serviceWanted: Boolean
+        get() = prefs.getBoolean(KEY_SERVICE_WANTED, false)
+        set(value) = prefs.edit().putBoolean(KEY_SERVICE_WANTED, value).apply()
+
     /** Remembers that the user was guided to the system Always-on VPN screen. */
     var killSwitchHint: Boolean
         get() = prefs.getBoolean(KEY_KILL_SWITCH, false)
@@ -283,6 +297,8 @@ class Store(context: Context) {
         private const val KEY_SUBS = "subs"
         private const val KEY_SELECTED = "selected"
         private const val KEY_AUTOSTART = "autostart"
+        private const val KEY_AUTO_RECONNECT = "auto_reconnect"
+        private const val KEY_SERVICE_WANTED = "service_wanted"
         private const val KEY_KILL_SWITCH = "kill_switch_hint"
         private const val KEY_LAST_UPDATE_CHECK = "last_update_check"
 

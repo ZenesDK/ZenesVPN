@@ -2,6 +2,9 @@ package com.zenes.vpn.ui
 
 import android.content.Intent
 import android.graphics.Bitmap
+import android.net.Uri
+import android.os.PowerManager
+import android.provider.Settings
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -34,6 +37,7 @@ import androidx.compose.material.icons.filled.Route
 import androidx.compose.material.icons.filled.SaveAlt
 import androidx.compose.material.icons.filled.SystemUpdateAlt
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -47,6 +51,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -59,6 +64,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
@@ -79,6 +85,8 @@ import com.zenes.vpn.ui.theme.VividViolet
 import com.zenes.vpn.ui.theme.cardTintBrush
 import com.zenes.vpn.util.Backup
 import com.zenes.vpn.util.toast
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.nekohasekai.libbox.Libbox
 import kotlinx.coroutines.Dispatchers
@@ -94,6 +102,7 @@ fun SettingsScreen(onOpenPerApps: () -> Unit, onOpenStats: () -> Unit) {
     val clipboard = LocalClipboardManager.current
 
     var autostart by remember { mutableStateOf(Store(context).autostart) }
+    var autoReconnect by remember { mutableStateOf(Store(context).autoReconnect) }
     var killSwitch by remember { mutableStateOf(Store(context).killSwitchHint) }
     var crashLog by remember { mutableStateOf(CrashLogger.fullReport()) }
     val scope = rememberCoroutineScope()
@@ -104,6 +113,21 @@ fun SettingsScreen(onOpenPerApps: () -> Unit, onOpenStats: () -> Unit) {
     var pendingRestore by remember { mutableStateOf<String?>(null) }
     var pendingSummary by remember { mutableStateOf<Backup.Summary?>(null) }
     val stampFormat = remember { SimpleDateFormat("yyyyMMdd_HHmm", Locale.getDefault()) }
+
+    // Battery optimization: aggressive ROMs force-close the foreground service,
+    // which reads to the user as "the VPN randomly drops". Re-check on every
+    // resume, so the card disappears right after the user grants the exemption.
+    var batteryExempt by remember { mutableStateOf(isIgnoringBatteryOptimizations(context)) }
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                batteryExempt = isIgnoringBatteryOptimizations(context)
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
 
     fun startRestore(text: String) {
         val summary = Backup.parse(text)
@@ -213,6 +237,15 @@ fun SettingsScreen(onOpenPerApps: () -> Unit, onOpenStats: () -> Unit) {
             },
         )
         SettingSwitch(
+            title = stringResource(R.string.auto_reconnect),
+            subtitle = stringResource(R.string.auto_reconnect_desc),
+            checked = autoReconnect,
+            onChange = {
+                autoReconnect = it
+                Store(context).autoReconnect = it
+            },
+        )
+        SettingSwitch(
             title = stringResource(R.string.kill_switch),
             subtitle = stringResource(R.string.kill_switch_desc),
             checked = killSwitch,
@@ -232,6 +265,34 @@ fun SettingsScreen(onOpenPerApps: () -> Unit, onOpenStats: () -> Unit) {
                 }
             },
         )
+        // Battery optimization hint: shown only while the exemption is missing.
+        if (!batteryExempt) {
+            Spacer(Modifier.height(8.dp))
+            Card(
+                shape = RoundedCornerShape(24.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                ),
+            ) {
+                Column(Modifier.padding(16.dp)) {
+                    Text(
+                        stringResource(R.string.battery_title),
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        stringResource(R.string.battery_desc),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    Button(onClick = { requestBatteryExemption(context) }) {
+                        Text(stringResource(R.string.battery_action))
+                    }
+                }
+            }
+        }
         var blockAds = remember { Store(context).blockAds }
         SettingSwitch(
             title = stringResource(R.string.ads_title),
@@ -883,6 +944,35 @@ private fun subAutoModeLabel(context: android.content.Context, mode: String): St
         Store.SUB_AUTO_24H -> context.getString(R.string.sub_auto_24h)
         else -> context.getString(R.string.sub_auto_launch)
     }
+
+private fun isIgnoringBatteryOptimizations(context: android.content.Context): Boolean =
+    (context.getSystemService(android.content.Context.POWER_SERVICE) as PowerManager)
+        .isIgnoringBatteryOptimizations(context.packageName)
+
+/**
+ * Asks the system to exempt ZenesVPN from battery optimization (doze, app
+ * standby, aggressive ROM killers). The direct request dialog is not available
+ * on every ROM — fall back to the system list where the user finds the app
+ * manually.
+ */
+private fun requestBatteryExemption(context: android.content.Context) {
+    try {
+        context.startActivity(
+            Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS)
+                .setData(Uri.parse("package:${context.packageName}"))
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+        )
+    } catch (_: Throwable) {
+        try {
+            context.startActivity(
+                Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+            )
+        } catch (t: Throwable) {
+            toast(context, t.message ?: "?")
+        }
+    }
+}
 
 @Composable
 private fun SectionLabel(text: String, dot: Color = MaterialTheme.colorScheme.primary) {

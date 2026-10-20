@@ -62,9 +62,14 @@
     <string name="section_connection">Connection</string>
     <string name="autostart">Start on boot</string>
     <string name="autostart_desc">Connect automatically after the device boots</string>
+    <string name="auto_reconnect">Auto-reconnect</string>
+    <string name="auto_reconnect_desc">Bring the tunnel back by itself after a drop, a network switch or the system killing the app (up to 5 attempts)</string>
     <string name="kill_switch">Kill Switch</string>
     <string name="kill_switch_desc">Block traffic if the VPN drops. Opens the system “Always-on VPN” screen — enable it for ZenesVPN.</string>
     <string name="kill_switch_hint">In the system VPN settings enable “Always-on VPN” and “Block connections without VPN” for ZenesVPN.</string>
+    <string name="battery_title">Battery optimization</string>
+    <string name="battery_desc">Some phones (MIUI, Huawei, vivo) force-close background services — the VPN may drop in your pocket or disappear after a while. Allow ZenesVPN to run unrestricted. If your phone has an “Autostart” switch, enable it for ZenesVPN too.</string>
+    <string name="battery_action">Allow</string>
     <string name="section_diagnostics">Diagnostics</string>
     <string name="crash_log">Error log</string>
     <string name="crash_log_empty">No errors recorded</string>
@@ -78,6 +83,7 @@
     <!-- Notifications -->
     <string name="notif_channel">VPN status</string>
     <string name="notif_connecting">Connecting…</string>
+    <string name="notif_reconnecting">Reconnecting (%1$d of %2$d)…</string>
     <string name="notif_connected">Protected</string>
     <string name="notif_disconnected">Disconnected</string>
     <string name="notif_error">Error: %1$s</string>
@@ -85,6 +91,7 @@
     <string name="notif_protected_stats">Protected · ↓ %1$s · ↑ %2$s</string>
     <string name="notif_speed_line">↓ %1$s · ↑ %2$s</string>
     <string name="notif_session_traffic">Session: ↓ %1$s · ↑ %2$s</string>
+    <string name="err_reconnect_failed">Could not restore the connection after several attempts</string>
 
     <!-- Updates -->
     <string name="update_check">Check for updates</string>

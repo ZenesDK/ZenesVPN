@@ -48,6 +48,13 @@ class ZenesVpnService : VpnService(), PlatformInterface, CommandServerHandler {
         private const val NOTIF_ID = 1
         private const val STATS_INTERVAL_MS = 1000L
 
+        // ---- auto-reconnect (watchdog) ----
+        private const val MAX_RETRIES = 5
+        private val RETRY_DELAYS_MS = longArrayOf(2_000, 5_000, 10_000, 15_000, 30_000)
+        private const val WATCHDOG_INTERVAL_MS = 5_000L
+        private const val HUNG_CONNECTING_MS = 45_000L
+        private const val STABLE_RESET_MS = 45_000L
+
         fun start(context: Context) {
             try {
                 ContextCompat.startForegroundService(
@@ -79,6 +86,14 @@ class ZenesVpnService : VpnService(), PlatformInterface, CommandServerHandler {
     @Volatile private var vpnPfd: ParcelFileDescriptor? = null
     private var networkCallback: ConnectivityManager.NetworkCallback? = null
 
+    // ---- auto-reconnect state ----
+    @Volatile private var wantsConnected = false
+    @Volatile private var retryAttempt = 0
+    @Volatile private var retryPending = false
+    @Volatile private var lastStartAttemptMs = 0L
+    private var connectedSinceMs = 0L
+    private var retryRunnable: Runnable? = null
+
     // ------------------------------------------------------------ lifecycle
 
     override fun onCreate() {
@@ -94,6 +109,11 @@ class ZenesVpnService : VpnService(), PlatformInterface, CommandServerHandler {
         CrashLogger.breadcrumb("service onStartCommand action=$action")
 
         if (action == ACTION_STOP) {
+            // Explicit stop (UI, notification, tile): remember the intent so the
+            // watchdog and a sticky restart never resurrect the tunnel.
+            wantsConnected = false
+            Store(this).serviceWanted = false
+            cancelRecovery()
             stopBox()
             return START_NOT_STICKY
         }
@@ -101,8 +121,31 @@ class ZenesVpnService : VpnService(), PlatformInterface, CommandServerHandler {
         // Must reach the foreground state immediately (Android 14 requirement).
         if (!bringForeground()) return START_NOT_STICKY
 
-        if (!boxStarted) startBox()
-        return START_NOT_STICKY
+        if (intent == null) {
+            // START_STICKY recreation after the system killed the process: the
+            // tunnel comes back only if the user had it up before the kill.
+            wantsConnected = Store(this).serviceWanted
+            CrashLogger.breadcrumb("sticky restart: serviceWanted=$wantsConnected")
+        } else {
+            wantsConnected = true
+            Store(this).serviceWanted = true
+        }
+        if (!wantsConnected) {
+            mainHandler.post {
+                stopForeground(STOP_FOREGROUND_REMOVE)
+                stopSelf()
+            }
+            return START_NOT_STICKY
+        }
+
+        if (!boxStarted && !retryPending) {
+            retryAttempt = 0
+            startBox()
+        }
+        startWatchdog()
+        // START_STICKY: if Android kills the process (OOM, MIUI battery killer),
+        // the service is recreated and the tunnel is restored automatically.
+        return START_STICKY
     }
 
     private fun bringForeground(): Boolean {
@@ -130,6 +173,8 @@ class ZenesVpnService : VpnService(), PlatformInterface, CommandServerHandler {
     private fun startBox() {
         stopInProgress = false
         shouldStop = false
+        lastStartAttemptMs = System.currentTimeMillis()
+        connectedSinceMs = 0L
         VpnStateBus.post(VpnStateBus.State.CONNECTING)
         updateNotification()
         Thread({
@@ -159,25 +204,33 @@ class ZenesVpnService : VpnService(), PlatformInterface, CommandServerHandler {
                 CrashLogger.breadcrumb("box started OK")
                 VpnStateBus.post(VpnStateBus.State.CONNECTED)
                 updateNotification()
+                retryAttempt = 0
+                connectedSinceMs = System.currentTimeMillis()
                 startStatsTicker()
                 BoxClient.ensureStarted()
             } catch (t: Throwable) {
                 if (shouldStop) return@Thread
                 stopStatsTicker()
                 CrashLogger.log("Failed to start VPN service", t)
-                VpnStateBus.post(
-                    VpnStateBus.State.ERROR,
-                    (t.message ?: t.javaClass.simpleName).take(300),
-                )
+                val message = (t.message ?: t.javaClass.simpleName).take(300)
                 cleanupServer()
                 boxStarted = false
                 try {
                     BoxClient.stop()
                 } catch (_: Throwable) {
                 }
-                mainHandler.post {
-                    stopForeground(STOP_FOREGROUND_REMOVE)
-                    stopSelf()
+                // A missing config is a setup error, not a network hiccup —
+                // retrying could never succeed. Everything else gets the
+                // watchdog treatment instead of dying on the first hiccup.
+                val fatal = message.contains("config.json not found")
+                if (wantsConnected && !fatal && Store(this).autoReconnect) {
+                    scheduleRetry()
+                } else {
+                    VpnStateBus.post(VpnStateBus.State.ERROR, message)
+                    mainHandler.post {
+                        stopForeground(STOP_FOREGROUND_REMOVE)
+                        stopSelf()
+                    }
                 }
             }
         }, "zenes-start").start()
@@ -187,6 +240,7 @@ class ZenesVpnService : VpnService(), PlatformInterface, CommandServerHandler {
         if (stopInProgress) return
         stopInProgress = true
         shouldStop = true
+        cancelRecovery()
         CrashLogger.breadcrumb("stopBox requested")
         stopStatsTicker()
         VpnStateBus.post(VpnStateBus.State.STOPPING)
@@ -238,6 +292,7 @@ class ZenesVpnService : VpnService(), PlatformInterface, CommandServerHandler {
     }
 
     override fun onDestroy() {
+        cancelRecovery()
         stopStatsTicker()
         if (boxStarted || commandServer != null) {
             // Service killed by the system while running — clean up best effort.
@@ -261,8 +316,12 @@ class ZenesVpnService : VpnService(), PlatformInterface, CommandServerHandler {
     override fun onRevoke() {
         // The VPN was revoked outside the app (quick settings tile, another VPN
         // app, system settings). Stop the engine so it does not keep running
-        // with a dead interface.
+        // with a dead interface. Revocation means somebody took over — do not
+        // fight for the tunnel, mark it as unwanted.
         CrashLogger.breadcrumb("onRevoke — VPN revoked by system")
+        wantsConnected = false
+        Store(this).serviceWanted = false
+        cancelRecovery()
         stopBox()
         super.onRevoke()
     }
@@ -340,7 +399,13 @@ class ZenesVpnService : VpnService(), PlatformInterface, CommandServerHandler {
                 )
             }
             VpnStateBus.State.CONNECTING, VpnStateBus.State.STOPPING ->
-                builder.setContentText(getString(R.string.notif_connecting))
+                if (state == VpnStateBus.State.CONNECTING && retryPending && retryAttempt > 0) {
+                    builder.setContentText(
+                        getString(R.string.notif_reconnecting, retryAttempt, MAX_RETRIES),
+                    )
+                } else {
+                    builder.setContentText(getString(R.string.notif_connecting))
+                }
             VpnStateBus.State.ERROR ->
                 builder.setContentText(getString(R.string.notif_error, VpnStateBus.error.value ?: ""))
             else ->
@@ -361,7 +426,17 @@ class ZenesVpnService : VpnService(), PlatformInterface, CommandServerHandler {
     // ------------------------------------------------------------ CommandServerHandler
 
     override fun serviceStop() {
-        mainHandler.post { stopBox() }
+        // The engine itself asked to stop (fatal internal error). If the user
+        // still wants the tunnel, treat it as a drop and let the reconnect
+        // machinery bring it back instead of dying quietly.
+        if (wantsConnected && Store(this).autoReconnect) {
+            CrashLogger.breadcrumb("engine requested stop — treating as drop")
+            stopStatsTicker()
+            forceEngineCleanup()
+            scheduleRetry()
+        } else {
+            mainHandler.post { stopBox() }
+        }
     }
 
     override fun serviceReload() {
@@ -727,6 +802,95 @@ class ZenesVpnService : VpnService(), PlatformInterface, CommandServerHandler {
 
     override fun createBridge(options: io.nekohasekai.libbox.BridgeOptions?): io.nekohasekai.libbox.BridgeSession {
         throw UnsupportedOperationException("bridge is not supported")
+    }
+
+    // ------------------------------------------------------------ auto-reconnect watchdog
+
+    /**
+     * Periodic health check while the user wants the VPN up. Restores the
+     * tunnel after an unexpected drop: engine death, a failed start or a hung
+     * CONNECTING state. A connection that stays up for a while resets the
+     * attempt counter, so a bad network hour does not burn the budget forever.
+     */
+    private val watchdog = object : Runnable {
+        override fun run() {
+            if (!wantsConnected) return
+            when (VpnStateBus.state.value) {
+                VpnStateBus.State.CONNECTED -> {
+                    if (connectedSinceMs == 0L) connectedSinceMs = System.currentTimeMillis()
+                    if (System.currentTimeMillis() - connectedSinceMs > STABLE_RESET_MS && retryAttempt != 0) {
+                        retryAttempt = 0
+                        CrashLogger.breadcrumb("connection stable — retry counter reset")
+                    }
+                }
+                VpnStateBus.State.CONNECTING -> {
+                    connectedSinceMs = 0L
+                    val hung = System.currentTimeMillis() - lastStartAttemptMs > HUNG_CONNECTING_MS
+                    if (hung && !retryPending && !stopInProgress) {
+                        CrashLogger.breadcrumb("watchdog: CONNECTING is hung, forcing engine restart")
+                        forceEngineCleanup()
+                        scheduleRetry()
+                    }
+                }
+                VpnStateBus.State.ERROR -> {
+                    connectedSinceMs = 0L
+                    if (!retryPending && !stopInProgress) {
+                        CrashLogger.breadcrumb("watchdog: ERROR state, scheduling reconnect")
+                        scheduleRetry()
+                    }
+                }
+                else -> connectedSinceMs = 0L
+            }
+            mainHandler.postDelayed(this, WATCHDOG_INTERVAL_MS)
+        }
+    }
+
+    private fun startWatchdog() {
+        mainHandler.removeCallbacks(watchdog)
+        mainHandler.postDelayed(watchdog, WATCHDOG_INTERVAL_MS)
+    }
+
+    private fun scheduleRetry() {
+        if (!wantsConnected || retryPending || stopInProgress) return
+        if (retryAttempt >= MAX_RETRIES) {
+            CrashLogger.breadcrumb("auto-reconnect: attempts exhausted")
+            VpnStateBus.post(VpnStateBus.State.ERROR, getString(R.string.err_reconnect_failed))
+            mainHandler.post {
+                stopForeground(STOP_FOREGROUND_REMOVE)
+                stopSelf()
+            }
+            return
+        }
+        val attempt = ++retryAttempt
+        val delay = RETRY_DELAYS_MS[attempt - 1]
+        retryPending = true
+        CrashLogger.breadcrumb("auto-reconnect attempt $attempt/$MAX_RETRIES in ${delay}ms")
+        updateNotification() // shows "Reconnecting (N of M)…"
+        val r = Runnable {
+            retryPending = false
+            retryRunnable = null
+            if (wantsConnected && !boxStarted && !stopInProgress) startBox()
+        }
+        retryRunnable = r
+        mainHandler.postDelayed(r, delay)
+    }
+
+    private fun cancelRecovery() {
+        retryRunnable?.let { mainHandler.removeCallbacks(it) }
+        retryRunnable = null
+        retryPending = false
+        mainHandler.removeCallbacks(watchdog)
+    }
+
+    /** Tears the engine down without touching state posts (used before a retry). */
+    private fun forceEngineCleanup() {
+        closeTunInterface()
+        try {
+            BoxClient.stop()
+        } catch (_: Throwable) {
+        }
+        cleanupServer()
+        boxStarted = false
     }
 
     // ------------------------------------------------------------ helpers

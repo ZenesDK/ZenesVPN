@@ -62,9 +62,14 @@
     <string name="section_connection">Подключение</string>
     <string name="autostart">Автозапуск</string>
     <string name="autostart_desc">Подключаться автоматически после включения устройства</string>
+    <string name="auto_reconnect">Автопереподключение</string>
+    <string name="auto_reconnect_desc">Сам восстанавливает туннель после обрыва, смены сети или убийства приложения системой (до 5 попыток)</string>
     <string name="kill_switch">Kill Switch</string>
     <string name="kill_switch_desc">Блокировать трафик при обрыве VPN. Откроет системный экран «Always-on VPN» — включите его для ZenesVPN.</string>
     <string name="kill_switch_hint">В системных настройках VPN включите «Always-on VPN» и «Блокировать соединения без VPN» для ZenesVPN.</string>
+    <string name="battery_title">Оптимизация батареи</string>
+    <string name="battery_desc">Некоторые телефоны (MIUI, Huawei, vivo) принудительно закрывают фоновый сервис — VPN может обрываться в кармане или пропадать через время. Разрешите ZenesVPN работать без ограничений. Если на телефоне есть переключатель «Автозапуск» — включите его и для ZenesVPN.</string>
+    <string name="battery_action">Разрешить</string>
     <string name="section_diagnostics">Диагностика</string>
     <string name="crash_log">Журнал ошибок</string>
     <string name="crash_log_empty">Ошибок не зафиксировано</string>
@@ -78,6 +83,7 @@
     <!-- Notifications -->
     <string name="notif_channel">Статус VPN</string>
     <string name="notif_connecting">Подключение…</string>
+    <string name="notif_reconnecting">Переподключение (%1$d из %2$d)…</string>
     <string name="notif_connected">Защищено</string>
     <string name="notif_disconnected">Отключено</string>
     <string name="notif_error">Ошибка: %1$s</string>
@@ -85,6 +91,7 @@
     <string name="notif_protected_stats">Защищено · ↓ %1$s · ↑ %2$s</string>
     <string name="notif_speed_line">↓ %1$s · ↑ %2$s</string>
     <string name="notif_session_traffic">За сессию: ↓ %1$s · ↑ %2$s</string>
+    <string name="err_reconnect_failed">Не удалось восстановить подключение после нескольких попыток</string>
 
     <!-- Обновления -->
     <string name="update_check">Проверить обновления</string>
