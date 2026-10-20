@@ -97,6 +97,11 @@
     <!-- Updates -->
     <string name="update_check">Check for updates</string>
     <string name="update_check_sub">Updates are delivered via GitHub Releases</string>
+    <string name="update_channel_title">Update channel</string>
+    <string name="update_channel_all">All releases</string>
+    <string name="update_channel_all_desc">Offer the newest build as soon as it ships, including pre-releases</string>
+    <string name="update_channel_stable">Stable only</string>
+    <string name="update_channel_stable_desc">Offer only full releases; pre-releases are ignored</string>
     <string name="update_checking">Checking…</string>
     <string name="update_latest">You are on the latest version</string>
     <string name="update_available_short">Update %1$s is available</string>

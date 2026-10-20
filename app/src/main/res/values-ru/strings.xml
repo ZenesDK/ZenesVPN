@@ -97,6 +97,11 @@
     <!-- Обновления -->
     <string name="update_check">Проверить обновления</string>
     <string name="update_check_sub">Обновления приходят через GitHub Releases</string>
+    <string name="update_channel_title">Канал обновлений</string>
+    <string name="update_channel_all">Все новые</string>
+    <string name="update_channel_all_desc">Предлагать самую свежую сборку сразу после выхода, включая пре-релизы</string>
+    <string name="update_channel_stable">Только стабильные</string>
+    <string name="update_channel_stable_desc">Предлагать только полноценные релизы; пре-релизы игнорируются</string>
     <string name="update_checking">Проверка…</string>
     <string name="update_latest">Установлена последняя версия</string>
     <string name="update_available_short">Доступно обновление %1$s</string>

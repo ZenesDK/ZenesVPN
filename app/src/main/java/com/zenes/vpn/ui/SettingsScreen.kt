@@ -32,6 +32,7 @@ import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.FolderOpen
+import androidx.compose.material.icons.filled.NewReleases
 import androidx.compose.material.icons.filled.OpenInNew
 import androidx.compose.material.icons.filled.QrCode2
 import androidx.compose.material.icons.filled.QrCodeScanner
@@ -850,6 +851,49 @@ fun SettingsScreen(onOpenPerApps: () -> Unit, onOpenStats: () -> Unit) {
             }
         }
 
+        // ---------------- update channel ----------------
+        Spacer(Modifier.height(8.dp))
+        var updateChannel by remember { mutableStateOf(Store(context).updateChannel) }
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(24.dp))
+                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
+        ) {
+            Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        Icons.Default.NewReleases,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                    )
+                    Spacer(Modifier.width(12.dp))
+                    Text(
+                        stringResource(R.string.update_channel_title),
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                }
+                Spacer(Modifier.height(2.dp))
+                ChannelOption(
+                    mode = Store.UPDATE_ALL,
+                    selected = updateChannel,
+                    onSelect = {
+                        updateChannel = it
+                        Store(context).updateChannel = it
+                    },
+                )
+                ChannelOption(
+                    mode = Store.UPDATE_STABLE,
+                    selected = updateChannel,
+                    onSelect = {
+                        updateChannel = it
+                        Store(context).updateChannel = it
+                    },
+                )
+            }
+        }
+
         // ---------------- github ----------------
         Spacer(Modifier.height(8.dp))
         Box(
@@ -932,6 +976,39 @@ private fun BackupRow(
             Text(title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
             Text(
                 subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+@Composable
+private fun ChannelOption(mode: String, selected: String, onSelect: (String) -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onSelect(mode) }
+            .padding(vertical = 6.dp),
+        verticalAlignment = Alignment.Top,
+    ) {
+        RadioButton(selected = selected == mode, onClick = { onSelect(mode) })
+        Spacer(Modifier.width(8.dp))
+        Column {
+            Text(
+                text = if (mode == Store.UPDATE_STABLE) {
+                    stringResource(R.string.update_channel_stable)
+                } else {
+                    stringResource(R.string.update_channel_all)
+                },
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            Text(
+                text = if (mode == Store.UPDATE_STABLE) {
+                    stringResource(R.string.update_channel_stable_desc)
+                } else {
+                    stringResource(R.string.update_channel_all_desc)
+                },
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

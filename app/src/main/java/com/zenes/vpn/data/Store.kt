@@ -263,6 +263,13 @@ class Store(context: Context) {
         get() = prefs.getLong(KEY_LAST_UPDATE_CHECK, 0)
         set(value) = prefs.edit().putLong(KEY_LAST_UPDATE_CHECK, value).apply()
 
+    // ---------- update channel ----------
+
+    /** UPDATE_ALL / UPDATE_STABLE — which releases the self-updater offers. */
+    var updateChannel: String
+        get() = prefs.getString(KEY_UPDATE_CHANNEL, UPDATE_ALL) ?: UPDATE_ALL
+        set(value) = prefs.edit().putString(KEY_UPDATE_CHANNEL, value).apply()
+
     // ---------- traffic routing (RU smart split) ----------
 
     /** ROUTE_ALL / ROUTE_RU */
@@ -301,6 +308,10 @@ class Store(context: Context) {
         private const val KEY_SERVICE_WANTED = "service_wanted"
         private const val KEY_KILL_SWITCH = "kill_switch_hint"
         private const val KEY_LAST_UPDATE_CHECK = "last_update_check"
+
+        const val UPDATE_ALL = "all"
+        const val UPDATE_STABLE = "stable"
+        private const val KEY_UPDATE_CHANNEL = "update_channel"
 
         const val PER_APP_ALL = "all"
         const val PER_APP_INCLUDE = "include"
