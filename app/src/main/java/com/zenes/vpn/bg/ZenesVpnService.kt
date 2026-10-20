@@ -15,6 +15,7 @@ import android.net.NetworkRequest
 import android.net.VpnService
 import android.os.Build
 import android.os.Handler
+import android.os.HandlerThread
 import android.os.IBinder
 import android.os.Looper
 import android.os.ParcelFileDescriptor
@@ -86,7 +87,46 @@ class ZenesVpnService : VpnService(), PlatformInterface, CommandServerHandler {
     @Volatile private var boxStarted = false
     @Volatile private var stopInProgress = false
     @Volatile private var vpnPfd: ParcelFileDescriptor? = null
-    private var networkCallback: ConnectivityManager.NetworkCallback? = null
+
+    /**
+     * Default-interface monitor state. Tracks ONLY the system's best network
+     * (SFA/shadowsocks approach). The old implementation used a plain
+     * registerNetworkCallback, which fires for EVERY internet-capable network:
+     * on phones with dual Wi-Fi + cellular (OriginOS dual-band boost and
+     * friends) every onAvailable/onLinkPropertiesChanged was reported to the
+     * engine as "the default interface changed", so sing-box re-dialled its
+     * outbound connections (QUIC/hysteria2 especially) in a storm and could
+     * settle on a blocked cellular interface — a green tunnel that passed no
+     * traffic. registerDefaultNetworkCallback is not an option either: since
+     * Android P it reports the VPN interface while our own tunnel is up.
+     */
+    @Volatile private var interfaceListener: InterfaceUpdateListener? = null
+    @Volatile private var defaultNetwork: Network? = null
+    private var defaultNetworkRegistered = false
+    private val netmonHandler by lazy {
+        val ht = HandlerThread("zenes-netmon")
+        ht.start()
+        Handler(ht.looper)
+    }
+
+    private val defaultNetworkCallback = object : ConnectivityManager.NetworkCallback() {
+        override fun onAvailable(network: Network) {
+            defaultNetwork = network
+            reportDefaultInterface(network)
+        }
+
+        override fun onCapabilitiesChanged(network: Network, nc: NetworkCapabilities) {
+            if (defaultNetwork === network) reportDefaultInterface(network)
+        }
+
+        override fun onLinkPropertiesChanged(network: Network, lp: LinkProperties) {
+            if (defaultNetwork === network) reportDefaultInterface(network)
+        }
+
+        override fun onLost(network: Network) {
+            if (defaultNetwork === network) defaultNetwork = null
+        }
+    }
 
     // ---- auto-reconnect state ----
     @Volatile private var wantsConnected = false
@@ -314,13 +354,14 @@ class ZenesVpnService : VpnService(), PlatformInterface, CommandServerHandler {
         }
         // Never leak the VPN interface if the service is destroyed.
         closeTunInterface()
-        networkCallback?.let { cb ->
+        if (defaultNetworkRegistered) {
             try {
-                connectivity().unregisterNetworkCallback(cb)
+                connectivity().unregisterNetworkCallback(defaultNetworkCallback)
             } catch (_: Throwable) {
             }
+            defaultNetworkRegistered = false
         }
-        networkCallback = null
+        interfaceListener = null
         super.onDestroy()
     }
 
@@ -689,50 +730,94 @@ class ZenesVpnService : VpnService(), PlatformInterface, CommandServerHandler {
     }
 
     override fun startDefaultInterfaceMonitor(listener: InterfaceUpdateListener) {
+        interfaceListener = listener
+        // Synchronous initial report: the engine must know the outbound
+        // interface BEFORE the first dial, otherwise it logs
+        // "missing default interface" and the first connections race the
+        // callback delivery.
+        val initial = currentPhysicalNetwork()
+        defaultNetwork = initial
+        if (initial != null) reportDefaultInterface(initial)
+        registerDefaultNetworkMonitor()
+    }
+
+    private fun currentPhysicalNetwork(): Network? {
+        val cm = connectivity()
+        defaultNetwork?.let { net ->
+            val caps = cm.getNetworkCapabilities(net)
+            if (caps != null && !caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN)) return net
+        }
+        val active = cm.activeNetwork ?: return null
+        val caps = cm.getNetworkCapabilities(active) ?: return null
+        if (caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN)) return null
+        if (!caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)) return null
+        return active
+    }
+
+    private fun registerDefaultNetworkMonitor() {
+        if (defaultNetworkRegistered) return
         val request = NetworkRequest.Builder()
             .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+            .addCapability(NetworkCapabilities.NET_CAPABILITY_NOT_RESTRICTED)
             .build()
-        val cb = object : ConnectivityManager.NetworkCallback() {
-            override fun onAvailable(network: Network) {
-                reportDefaultInterface(listener, network)
-            }
-
-            override fun onLinkPropertiesChanged(network: Network, linkProperties: LinkProperties) {
-                reportDefaultInterface(listener, network)
-            }
-        }
-        networkCallback = cb
         try {
-            connectivity().registerNetworkCallback(request, cb)
+            when {
+                Build.VERSION.SDK_INT >= 31 -> connectivity()
+                    .registerBestMatchingNetworkCallback(request, defaultNetworkCallback, netmonHandler)
+                Build.VERSION.SDK_INT >= 28 -> connectivity()
+                    .requestNetwork(request, defaultNetworkCallback, netmonHandler)
+                Build.VERSION.SDK_INT >= 26 -> connectivity()
+                    .registerDefaultNetworkCallback(defaultNetworkCallback, netmonHandler)
+                else -> @Suppress("DEPRECATION") connectivity()
+                    .registerDefaultNetworkCallback(defaultNetworkCallback)
+            }
+            defaultNetworkRegistered = true
         } catch (t: Throwable) {
-            CrashLogger.log("registerNetworkCallback failed", t)
-            throw t
+            CrashLogger.log("default network monitor registration failed", t)
         }
     }
 
     override fun closeDefaultInterfaceMonitor(listener: InterfaceUpdateListener) {
-        networkCallback?.let { cb ->
+        interfaceListener = null
+        if (defaultNetworkRegistered) {
             try {
-                connectivity().unregisterNetworkCallback(cb)
+                connectivity().unregisterNetworkCallback(defaultNetworkCallback)
             } catch (_: Throwable) {
             }
+            defaultNetworkRegistered = false
         }
-        networkCallback = null
     }
 
-    private fun reportDefaultInterface(listener: InterfaceUpdateListener, network: Network) {
-        try {
-            val linkProperties = connectivity().getLinkProperties(network) ?: return
-            val name = linkProperties.interfaceName ?: return
-            val index = try {
-                JavaNetworkInterface.getByName(name)?.index ?: 0
-            } catch (_: Throwable) {
-                0
+    /**
+     * Reports the interface of a tracked (default) network to the engine.
+     * Link properties and the interface index may not be ready right after
+     * onAvailable — retry briefly, like SFA does. VPN-transport networks are
+     * never reported: binding outbounds to a tun would loop packets back
+     * into the engine.
+     */
+    private fun reportDefaultInterface(network: Network) {
+        val listener = interfaceListener ?: return
+        val cm = connectivity()
+        for (attempt in 0 until 10) {
+            val caps = cm.getNetworkCapabilities(network)
+            if (caps != null && caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN)) return
+            val name = cm.getLinkProperties(network)?.interfaceName
+            if (name == null) {
+                Thread.sleep(100)
+                continue
             }
-            val caps = connectivity().getNetworkCapabilities(network)
-            val expensive = caps?.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED) != true
+            val index = try {
+                JavaNetworkInterface.getByName(name)?.index
+            } catch (_: Throwable) {
+                null
+            }
+            if (index == null) {
+                Thread.sleep(100)
+                continue
+            }
+            val expensive = caps?.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED) == false
             listener.updateDefaultInterface(name, index, expensive, false)
-        } catch (_: Throwable) {
+            return
         }
     }
 

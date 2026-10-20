@@ -45,11 +45,16 @@ import java.net.HttpURLConnection
  * there is a single direct attempt — plus a clear hint in the error:
  * connect the VPN and retry, the check will ride the tunnel (and indeed
  * retries once automatically, see [retryOnConnect]).
+ *
+ * Versions: while the project iterates through pre-releases, the check
+ * looks at the newest NON-DRAFT release (pre-release or not) — otherwise
+ * /releases/latest would hide pre-release builds and in-app updates would
+ * stall every time a build ships as a pre-release.
  */
 object Updater {
 
-    private const val LATEST_URL =
-        "https://api.github.com/repos/ZenesDK/ZenesVPN/releases/latest"
+    private const val RELEASES_URL =
+        "https://api.github.com/repos/ZenesDK/ZenesVPN/releases?per_page=10"
     private const val CONNECT_TIMEOUT = 8_000
     private const val READ_TIMEOUT = 12_000
     /** Auto-check (app start) is throttled to once per 4 hours — polite to api.github.com. */
@@ -65,6 +70,8 @@ object Updater {
             val url: String,
             /** Raw release body (markdown changelog section) from GitHub. */
             val notes: String = "",
+            /** GitHub pre-release — shown as a badge in the update dialog. */
+            val prerelease: Boolean = false,
         ) : State()
 
         data class Downloading(val percent: Int) : State()
@@ -206,7 +213,7 @@ object Updater {
         }
 
     private fun fetchVia(network: Network?): State.Available? {
-        val conn = NetPath.open(LATEST_URL, network)
+        val conn = NetPath.open(RELEASES_URL, network)
         try {
             conn.connectTimeout = CONNECT_TIMEOUT
             conn.readTimeout = READ_TIMEOUT
@@ -214,11 +221,20 @@ object Updater {
             conn.setRequestProperty("User-Agent", "ZenesVPN/${BuildConfig.VERSION_NAME}")
             if (conn.responseCode != 200) throw Exception("HTTP ${conn.responseCode}")
             val body = conn.inputStream.bufferedReader().use { it.readText() }
-            val json = JSONObject(body)
-            val tag = json.optString("tag_name").removePrefix("v")
+            val releases = org.json.JSONArray(body)
+            var release: JSONObject? = null
+            for (i in 0 until releases.length()) {
+                val r = releases.optJSONObject(i) ?: continue
+                if (!r.optBoolean("draft")) {
+                    release = r
+                    break
+                }
+            }
+            release ?: throw Exception("no releases")
+            val tag = release.optString("tag_name").removePrefix("v")
             var url: String? = null
             var size = 0L
-            val assets = json.optJSONArray("assets")
+            val assets = release.optJSONArray("assets")
             if (assets != null) {
                 for (i in 0 until assets.length()) {
                     val a = assets.optJSONObject(i) ?: continue
@@ -230,7 +246,13 @@ object Updater {
                 }
             }
             if (url.isNullOrBlank()) throw Exception("release has no apk asset")
-            return State.Available(tag, size, url, json.optString("body"))
+            return State.Available(
+                tag,
+                size,
+                url,
+                release.optString("body"),
+                release.optBoolean("prerelease"),
+            )
         } finally {
             conn.disconnect()
         }

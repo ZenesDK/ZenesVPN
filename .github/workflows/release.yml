@@ -69,5 +69,10 @@ jobs:
           body_path: release_body.md
           files: app/build/outputs/apk/release/*.apk
           fail_on_unmatched_files: true
+          # Every build ships as a PRE-RELEASE until confirmed stable by the
+          # user; a confirmed version is then promoted manually (release_polish
+          # or the GitHub UI flip the prerelease/make_latest flags).
+          prerelease: true
+          make_latest: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

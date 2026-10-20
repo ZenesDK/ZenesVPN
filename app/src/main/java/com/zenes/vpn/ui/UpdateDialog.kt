@@ -77,6 +77,14 @@ fun UpdateDialog() {
                                 Libbox.formatBytes(s.sizeBytes),
                             ),
                         )
+                        if (s.prerelease) {
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                stringResource(R.string.update_prerelease_badge),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.tertiary,
+                            )
+                        }
                         if (notes.isNotBlank()) {
                             Spacer(Modifier.height(10.dp))
                             Row(
