@@ -19,6 +19,7 @@ import android.os.HandlerThread
 import android.os.IBinder
 import android.os.Looper
 import android.os.ParcelFileDescriptor
+import android.system.OsConstants
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
@@ -57,6 +58,10 @@ class ZenesVpnService : VpnService(), PlatformInterface, CommandServerHandler {
         private const val WATCHDOG_INTERVAL_MS = 5_000L
         private const val HUNG_CONNECTING_MS = 45_000L
         private const val STABLE_RESET_MS = 45_000L
+
+        /** Green-but-dead tunnel: self-check failed and no stats flowed — how long
+         *  to wait after connect before the watchdog restarts the engine once. */
+        private const val DEAD_TUNNEL_GRACE_MS = 30_000L
 
         fun start(context: Context) {
             try {
@@ -103,6 +108,14 @@ class ZenesVpnService : VpnService(), PlatformInterface, CommandServerHandler {
     @Volatile private var interfaceListener: InterfaceUpdateListener? = null
     @Volatile private var defaultNetwork: Network? = null
     private var defaultNetworkRegistered = false
+
+    // Dedupe guard: the engine re-reads our whole interface list on EVERY
+    // report, and OriginOS fires onCapabilitiesChanged continuously while
+    // re-validating its dual-Wi-Fi setup. Re-reporting the same interface
+    // would only burn CPU on JNI roundtrips and (on a reload) races the
+    // fresh listener — so remember the last accepted report.
+    @Volatile private var lastReportedName: String? = null
+    @Volatile private var lastReportedIndex: Int = Int.MIN_VALUE
     private val netmonHandler by lazy {
         val ht = HandlerThread("zenes-netmon")
         ht.start()
@@ -124,7 +137,10 @@ class ZenesVpnService : VpnService(), PlatformInterface, CommandServerHandler {
         }
 
         override fun onLost(network: Network) {
-            if (defaultNetwork === network) defaultNetwork = null
+            if (defaultNetwork === network) {
+                defaultNetwork = null
+                reportNoDefaultInterface()
+            }
         }
     }
 
@@ -253,6 +269,8 @@ class ZenesVpnService : VpnService(), PlatformInterface, CommandServerHandler {
                 boxStarted = true
                 CrashLogger.breadcrumb("box started OK")
                 VpnStateBus.post(VpnStateBus.State.CONNECTED)
+                // Fresh session — the new self-check run owns the verdict now.
+                VpnStateBus.tunnelUnreachable.value = false
                 updateNotification()
                 retryAttempt = 0
                 connectedSinceMs = System.currentTimeMillis()
@@ -731,13 +749,27 @@ class ZenesVpnService : VpnService(), PlatformInterface, CommandServerHandler {
 
     override fun startDefaultInterfaceMonitor(listener: InterfaceUpdateListener) {
         interfaceListener = listener
-        // Synchronous initial report: the engine must know the outbound
-        // interface BEFORE the first dial, otherwise it logs
-        // "missing default interface" and the first connections race the
-        // callback delivery.
+        // A fresh engine instance knows nothing about our previous reports —
+        // reset the dedupe guard or the initial report would be swallowed
+        // after a watchdog engine restart.
+        lastReportedName = null
+        lastReportedIndex = Int.MIN_VALUE
+        // Synchronous initial report (same as SFA: DefaultNetworkMonitor already
+        // holds the current network when setListener fires): the engine must know
+        // the outbound interface BEFORE the first dial, otherwise it logs
+        // "missing default interface" and pauses all networks.
         val initial = currentPhysicalNetwork()
         defaultNetwork = initial
-        if (initial != null) reportDefaultInterface(initial)
+        if (initial != null) {
+            reportDefaultInterface(initial)
+        } else {
+            // No usable physical network right now (VPN transport active or
+            // nothing up yet): tell the engine explicitly instead of leaving it
+            // in the uninitialized state — it then waits instead of binding
+            // dial attempts to stale candidates.
+            CrashLogger.breadcrumb("netmon: no physical default at monitor start")
+            reportNoDefaultInterface()
+        }
         registerDefaultNetworkMonitor()
     }
 
@@ -779,12 +811,33 @@ class ZenesVpnService : VpnService(), PlatformInterface, CommandServerHandler {
 
     override fun closeDefaultInterfaceMonitor(listener: InterfaceUpdateListener) {
         interfaceListener = null
+        lastReportedName = null
+        lastReportedIndex = Int.MIN_VALUE
         if (defaultNetworkRegistered) {
             try {
                 connectivity().unregisterNetworkCallback(defaultNetworkCallback)
             } catch (_: Throwable) {
             }
             defaultNetworkRegistered = false
+        }
+    }
+
+    /**
+     * SFA semantics: when the tracked default network disappears, tell the
+     * engine ("", -1). The engine then clears its default interface and
+     * pauses new dials instead of silently binding to a stale interface —
+     * and wakes up as soon as the next real report arrives.
+     */
+    private fun reportNoDefaultInterface() {
+        val listener = interfaceListener ?: return
+        if (lastReportedIndex == Int.MIN_VALUE) return // never reported — nothing to retract
+        lastReportedName = null
+        lastReportedIndex = Int.MIN_VALUE
+        CrashLogger.breadcrumb("netmon: default network lost — engine notified")
+        try {
+            listener.updateDefaultInterface("", -1, false, false)
+        } catch (t: Throwable) {
+            CrashLogger.log("netmon: lost-report failed", t)
         }
     }
 
@@ -816,38 +869,80 @@ class ZenesVpnService : VpnService(), PlatformInterface, CommandServerHandler {
                 continue
             }
             val expensive = caps?.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED) == false
-            listener.updateDefaultInterface(name, index, expensive, false)
+            if (name == lastReportedName && index == lastReportedIndex) return // engine already knows
+            lastReportedName = name
+            lastReportedIndex = index
+            CrashLogger.breadcrumb("netmon: default interface \u2192 $name (index $index)")
+            try {
+                listener.updateDefaultInterface(name, index, expensive, false)
+            } catch (t: Throwable) {
+                CrashLogger.log("netmon: report failed for $name", t)
+            }
             return
         }
+        // Giving up WITHOUT a report is deliberate: the engine keeps its
+        // previous default (protected dialing continues) instead of receiving
+        // a bogus index that would poison the dialer's candidate list.
+        CrashLogger.breadcrumb("netmon: interface not ready after 1s — previous default kept")
     }
 
     override fun getInterfaces(): io.nekohasekai.libbox.NetworkInterfaceIterator {
+        val cm = connectivity()
+        val javaInterfaces = JavaNetworkInterface.getNetworkInterfaces()?.toList().orEmpty()
         val items = mutableListOf<LibboxNetworkInterface>()
-        val enumeration = JavaNetworkInterface.getNetworkInterfaces()
-        if (enumeration != null) {
-            for (jif in enumeration) {
-                try {
-                    val item = LibboxNetworkInterface()
-                    item.index = jif.index
-                    item.mtu = try { jif.mtu } catch (_: Throwable) { 0 }
-                    item.name = jif.name
-                    // libbox parses every address with netip.MustParsePrefix, so each
-                    // entry MUST be in CIDR form "addr/prefixLen" — a bare address
-                    // panics the Go side ("no '/'").
-                    val addresses = jif.interfaceAddresses.mapNotNull { ia ->
-                        val host = ia.address?.hostAddress?.split('%')?.firstOrNull()
-                        if (host.isNullOrEmpty()) return@mapNotNull null
-                        val prefixLen = ia.networkPrefixLength.toInt()
-                        if (prefixLen < 0) return@mapNotNull null
-                        "$host/$prefixLen"
-                    }.distinct()
-                    item.addresses = LibStringIterator(addresses)
-                    item.flags = if (jif.isUp) 1 else 0
-                    item.type = Libbox.InterfaceTypeOther
-                    item.metered = false
-                    items.add(item)
-                } catch (_: Throwable) {
+        for (network in cm.allNetworks) {
+            try {
+                val linkProperties = cm.getLinkProperties(network) ?: continue
+                val caps = cm.getNetworkCapabilities(network) ?: continue
+                val name = linkProperties.interfaceName ?: continue
+                val jif = javaInterfaces.firstOrNull { it.name == name } ?: continue
+                val item = LibboxNetworkInterface()
+                item.name = name
+                item.dnsServer = LibStringIterator(
+                    linkProperties.dnsServers.mapNotNull { it.hostAddress },
+                )
+                item.gateway = LibStringIterator(
+                    linkProperties.routes
+                        .filter { it.destination.prefixLength == 0 }
+                        .mapNotNull { it.gateway }
+                        .filterNot { it.isAnyLocalAddress }
+                        .mapNotNull { it.hostAddress },
+                )
+                item.type = when {
+                    caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) -> Libbox.InterfaceTypeWIFI
+                    caps.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) -> Libbox.InterfaceTypeCellular
+                    caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) -> Libbox.InterfaceTypeEthernet
+                    else -> Libbox.InterfaceTypeOther
                 }
+                item.index = jif.index
+                item.mtu = try { jif.mtu } catch (_: Throwable) { 0 }
+                // libbox parses every address with netip.MustParsePrefix, so each
+                // entry MUST be in CIDR form "addr/prefixLen" — a bare address
+                // panics the Go side ("no '/'").
+                val addresses = jif.interfaceAddresses.mapNotNull { ia ->
+                    val host = ia.address?.hostAddress?.split('%')?.firstOrNull()
+                    if (host.isNullOrEmpty()) return@mapNotNull null
+                    val prefixLen = ia.networkPrefixLength.toInt()
+                    if (prefixLen < 0) return@mapNotNull null
+                    "$host/$prefixLen"
+                }.distinct()
+                item.addresses = LibStringIterator(addresses)
+                // Raw Linux IFF_* semantics (libbox maps them with linkFlags):
+                // UP|RUNNING for internet-capable networks — NOT Java's isUp,
+                // which cannot be trusted to reflect connectivity on OEM ROMs.
+                // The engine filters bind candidates by Flags&FlagUp, so a wrong
+                // flag here silently empties the dialer's candidate list.
+                var flags = 0
+                if (caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)) {
+                    flags = flags or OsConstants.IFF_UP or OsConstants.IFF_RUNNING
+                }
+                if (jif.isLoopback) flags = flags or OsConstants.IFF_LOOPBACK
+                if (jif.isPointToPoint) flags = flags or OsConstants.IFF_POINTOPOINT
+                if (jif.supportsMulticast()) flags = flags or OsConstants.IFF_MULTICAST
+                item.flags = flags
+                item.metered = !caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED)
+                items.add(item)
+            } catch (_: Throwable) {
             }
         }
         return LibNetworkInterfaceIterator(items)
@@ -1002,6 +1097,22 @@ class ZenesVpnService : VpnService(), PlatformInterface, CommandServerHandler {
                     if (System.currentTimeMillis() - connectedSinceMs > STABLE_RESET_MS && retryAttempt != 0) {
                         retryAttempt = 0
                         CrashLogger.breadcrumb("connection stable — retry counter reset")
+                    }
+                    // Self-healing: the engine can report CONNECTED while not a
+                    // single byte crosses the tunnel (self-check failed, stats
+                    // never flowed — the classic green-dead-tunnel state). A
+                    // controlled engine restart re-dials everything from a clean
+                    // state; the retry budget (5) and the 45s stability reset
+                    // bound it, and a genuinely dead server ends in an honest
+                    // ERROR instead of an eternal green lie.
+                    if (VpnStateBus.tunnelUnreachable.value &&
+                        !retryPending && !stopInProgress &&
+                        System.currentTimeMillis() - connectedSinceMs > DEAD_TUNNEL_GRACE_MS
+                    ) {
+                        CrashLogger.breadcrumb("watchdog: tunnel unreachable — controlled engine restart")
+                        VpnStateBus.tunnelUnreachable.value = false // fresh verdict after reconnect
+                        forceEngineCleanup()
+                        scheduleRetry()
                     }
                 }
                 VpnStateBus.State.CONNECTING -> {
